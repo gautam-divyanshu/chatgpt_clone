@@ -2,15 +2,28 @@
 
 import { Sidebar } from "@/components/sidebar/Sidebar";
 import { MainContent } from "@/components/chat/MainContent";
+import { MobileHeader } from "@/components/layout/MobileHeader";
+import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { useState } from "react";
 
 export default function Home() {
-  return (
-    <div className="h-screen flex bg-gray-100">
-      {/* Sidebar */}
-      <Sidebar />
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-      {/* Main Content */}
-      <MainContent />
-    </div>
+  return (
+    <ThemeProvider>
+      <div className="h-screen flex bg-gray-100 dark:bg-gray-900">
+        {/* Sidebar */}
+        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Mobile Header */}
+          <MobileHeader onMenuClick={() => setSidebarOpen(true)} />
+
+          {/* Chat Content */}
+          <MainContent />
+        </div>
+      </div>
+    </ThemeProvider>
   );
 }

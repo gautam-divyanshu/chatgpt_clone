@@ -7,6 +7,7 @@ import {
   LibraryIcon,
   SoraIcon,
   ToggleIcon,
+  GPTsIcon,
 } from "@/components/ui/icons";
 
 interface SidebarProps {
@@ -50,21 +51,21 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       <div
         className={`
         fixed md:relative inset-y-0 left-0 z-50 h-full chatgpt-sidebar flex flex-col
-        transition-all duration-300 ease-in-out
+        transition-all duration-300 ease-in-out 
         ${isOpen ? "w-64 translate-x-0" : "w-16 translate-x-0 md:translate-x-0"}
         ${!isOpen ? "-translate-x-full md:translate-x-0" : ""}
       `}
       >
         {/* Top Section */}
-        <div className="flex-shrink-0 p-3">
+        <div className="flex-shrink-0 mb-4 px-3 pt-3 ">
           {/* Header */}
           <div
-            className={`flex items-center mb-4 transition-all duration-300 ${
+            className={`flex items-center transition-all duration-300 ${
               isOpen ? "justify-between" : "justify-center"
             }`}
           >
             {/* ChatGPT Icon - Always visible */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center ">
               <ChatGPTIcon />
             </div>
 
@@ -72,18 +73,21 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
             {isOpen && (
               <button
                 onClick={onToggle}
-                className="p-1.5 rounded-lg chatgpt-hover opacity-100 transition-opacity duration-300"
+                className=" rounded-lg pr-1 chatgpt-hover opacity-100 transition-opacity duration-300"
               >
                 <ToggleIcon />
               </button>
             )}
           </div>
+        </div>
 
+        {/* Navigation Items */}
+        <div className="pt-2 pb-3">
           {/* New Chat Button */}
           <button
             className={`
-            w-full flex items-center rounded-lg border border-white/20 chatgpt-hover text-left transition-all duration-300
-            ${isOpen ? "gap-3 px-3 py-2.5" : "justify-center p-2.5"}
+            w-full flex items-center rounded-lg  chatgpt-hover text-left transition-all duration-300
+            ${isOpen ? "gap-2 px-3 py-2.5" : "justify-center p-2.5"}
           `}
           >
             <NewChatIcon />
@@ -96,21 +100,62 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
               New chat
             </span>
           </button>
+
+          {/* Search chats */}
+          <button
+            className={`
+              w-full flex items-center rounded-lg chatgpt-hover text-left transition-all duration-300
+              ${isOpen ? "gap-2 px-3 py-2" : "justify-center p-2"}
+            `}
+          >
+            <SearchIcon />
+            <span
+              className={`
+                chatgpt-text text-sm whitespace-nowrap transition-all duration-300
+                ${
+                  isOpen
+                    ? "opacity-100 w-auto"
+                    : "opacity-0 w-0 overflow-hidden"
+                }
+              `}
+            >
+              Search chats
+            </span>
+          </button>
+
+          {/* Library */}
+          <button
+            className={`
+              w-full flex items-center rounded-lg chatgpt-hover text-left transition-all duration-300
+              ${isOpen ? "gap-2 px-3 py-2" : "justify-center p-2"}
+            `}
+          >
+            <LibraryIcon />
+            <span
+              className={`
+                chatgpt-text text-sm whitespace-nowrap transition-all duration-300
+                ${
+                  isOpen
+                    ? "opacity-100 w-auto"
+                    : "opacity-0 w-0 overflow-hidden"
+                }
+              `}
+            >
+              Library
+            </span>
+          </button>
         </div>
-
-        {/* Navigation Items */}
-        <div className="flex-shrink-0 px-3 pb-3">
-          <div className="space-y-1">
-            {/* Search chats */}
-            <button
-              className={`
+        <div>
+          {/* Sora */}
+          <button
+            className={`
               w-full flex items-center rounded-lg chatgpt-hover text-left transition-all duration-300
-              ${isOpen ? "gap-3 px-3 py-2" : "justify-center p-2"}
+              ${isOpen ? "gap-2 px-3 py-2" : "justify-center p-2"}
             `}
-            >
-              <SearchIcon />
-              <span
-                className={`
+          >
+            <SoraIcon />
+            <span
+              className={`
                 chatgpt-text text-sm whitespace-nowrap transition-all duration-300
                 ${
                   isOpen
@@ -118,21 +163,21 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                     : "opacity-0 w-0 overflow-hidden"
                 }
               `}
-              >
-                Search chats
-              </span>
-            </button>
-
-            {/* Library */}
-            <button
-              className={`
-              w-full flex items-center rounded-lg chatgpt-hover text-left transition-all duration-300
-              ${isOpen ? "gap-3 px-3 py-2" : "justify-center p-2"}
-            `}
             >
-              <LibraryIcon />
-              <span
-                className={`
+              Sora
+            </span>
+          </button>
+
+          {/* GPTs */}
+          <button
+            className={`
+              w-full flex items-center rounded-lg chatgpt-hover text-left transition-all duration-300
+              ${isOpen ? "gap-2 px-3 py-2" : "justify-center p-2"}
+            `}
+          >
+            <GPTsIcon />
+            <span
+              className={`
                 chatgpt-text text-sm whitespace-nowrap transition-all duration-300
                 ${
                   isOpen
@@ -140,48 +185,24 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                     : "opacity-0 w-0 overflow-hidden"
                 }
               `}
-              >
-                Library
-              </span>
-            </button>
-
-            {/* Sora */}
-            <button
-              className={`
-              w-full flex items-center rounded-lg chatgpt-hover text-left transition-all duration-300
-              ${isOpen ? "gap-3 px-3 py-2" : "justify-center p-2"}
-            `}
             >
-              <SoraIcon />
-              <span
-                className={`
-                chatgpt-text text-sm whitespace-nowrap transition-all duration-300
-                ${
-                  isOpen
-                    ? "opacity-100 w-auto"
-                    : "opacity-0 w-0 overflow-hidden"
-                }
-              `}
-              >
-                Sora
-              </span>
-            </button>
-          </div>
+              GPTs
+            </span>
+          </button>
         </div>
 
         {/* Chats Section - Only show when expanded */}
         {isOpen && (
-          <div className="flex-1 px-3 overflow-y-auto">
-            <div className="text-xs chatgpt-text-muted font-medium px-3 py-2 mb-2">
+          <div className="flex-1  overflow-y-auto">
+            <div className="text-2xs chatgpt-text-muted font-medium px-3 pt-6 ">
               Chats
             </div>
             <div className="space-y-1">
               {chatItems.map((chat, index) => (
                 <button
                   key={index}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg chatgpt-hover text-left group"
+                  className="w-full flex items-center gap-2 px-4 py-2 rounded-lg chatgpt-hover text-left group"
                 >
-                  <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
                   <span className="chatgpt-text text-sm truncate flex-1">
                     {chat}
                   </span>

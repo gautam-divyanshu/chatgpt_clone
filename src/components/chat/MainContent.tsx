@@ -1,189 +1,191 @@
 "use client";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { Message } from "./Message";
-import { ChatInput } from "./ChatInput";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { useState } from "react";
 
-interface ChatMessage {
-  id: string;
-  content: string;
-  isUser: boolean;
-  timestamp: string;
-}
-
 export function MainContent() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [input, setInput] = useState("");
 
-  const handleSendMessage = async (content: string) => {
-    // Add user message
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      content,
-      isUser: true,
-      timestamp: new Date().toLocaleTimeString(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setIsLoading(true);
-
-    // Simulate AI response after a delay
-    setTimeout(() => {
-      const aiMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        content: `This is a simulated response to: "${content}"\n\nI'm a demo ChatGPT clone built with Next.js, TypeScript, and Tailwind CSS. In a real implementation, this would connect to an AI API to generate responses.`,
-        isUser: false,
-        timestamp: new Date().toLocaleTimeString(),
-      };
-
-      setMessages((prev) => [...prev, aiMessage]);
-      setIsLoading(false);
-    }, 1500);
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (input.trim()) {
+      console.log("Send message:", input);
+      setInput("");
+    }
   };
 
-  const handleExampleClick = (prompt: string) => {
-    handleSendMessage(prompt);
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full">
+    <div className="flex-1 flex flex-col h-full chatgpt-main">
       {/* Header - Desktop Only */}
-      <div className="hidden md:flex justify-between items-center border-b border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-900">
-        <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-          ChatGPT
-        </h1>
-        <ThemeToggle />
-      </div>
-
-      {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto">
-        {messages.length === 0 ? (
-          // Welcome Screen
-          <div className="p-6 bg-gray-50 dark:bg-gray-900 h-full">
-            <div className="max-w-3xl mx-auto">
-              <Card className="mb-6">
-                <CardContent className="pt-6">
-                  <div className="text-center">
-                    <h2 className="text-2xl font-bold mb-2">
-                      How can I help you today?
-                    </h2>
-                    <p className="text-gray-600">
-                      Start a conversation or try one of these examples:
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Example Prompts */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card
-                  className="cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() =>
-                    handleExampleClick(
-                      "Explain quantum computing in simple terms"
-                    )
-                  }
-                >
-                  <CardContent className="p-4">
-                    <h3 className="font-medium mb-1">Explain a concept</h3>
-                    <p className="text-sm text-gray-600">
-                      Explain quantum computing in simple terms
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card
-                  className="cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() =>
-                    handleExampleClick("Write a Python function to sort a list")
-                  }
-                >
-                  <CardContent className="p-4">
-                    <h3 className="font-medium mb-1">Help with code</h3>
-                    <p className="text-sm text-gray-600">
-                      Write a Python function to sort a list
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card
-                  className="cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() =>
-                    handleExampleClick(
-                      "Write a short story about space exploration"
-                    )
-                  }
-                >
-                  <CardContent className="p-4">
-                    <h3 className="font-medium mb-1">Creative writing</h3>
-                    <p className="text-sm text-gray-600">
-                      Write a short story about space exploration
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card
-                  className="cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() =>
-                    handleExampleClick(
-                      "What are the benefits of renewable energy?"
-                    )
-                  }
-                >
-                  <CardContent className="p-4">
-                    <h3 className="font-medium mb-1">Answer questions</h3>
-                    <p className="text-sm text-gray-600">
-                      What are the benefits of renewable energy?
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          </div>
-        ) : (
-          // Messages
-          <div className="divide-y divide-gray-100">
-            {messages.map((message) => (
-              <Message
-                key={message.id}
-                content={message.content}
-                isUser={message.isUser}
-                timestamp={message.timestamp}
+      <div className="hidden md:flex justify-between items-center border-b border-white/10 px-6 py-4">
+        <div className="flex items-center gap-2">
+          <span className="chatgpt-text text-lg font-medium">ChatGPT</span>
+          <svg
+            className="w-4 h-4 chatgpt-text-muted"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M19 9l-7 7-7-7"
+            />
+          </svg>
+        </div>
+        <div className="flex items-center gap-2">
+          <button className="p-2 rounded-lg chatgpt-hover">
+            <svg
+              className="w-5 h-5 chatgpt-text"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
               />
-            ))}
-
-            {isLoading && (
-              <div className="flex gap-4 p-4 bg-white">
-                <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white text-sm font-medium">
-                  AI
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium text-sm">Assistant</span>
-                    <span className="text-xs text-gray-500">typing...</span>
-                  </div>
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                    <div
-                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                      style={{ animationDelay: "0.1s" }}
-                    ></div>
-                    <div
-                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                      style={{ animationDelay: "0.2s" }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+            </svg>
+          </button>
+          <button className="p-2 rounded-lg chatgpt-hover">
+            <svg
+              className="w-5 h-5 chatgpt-text"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
 
-      {/* Input Area */}
-      <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6">
+        {/* Center Content - Exact match to screenshot */}
+        <div className="max-w-2xl w-full text-center space-y-8">
+          {/* Main Heading */}
+          <div className="space-y-2">
+            <h1 className="text-3xl font-normal chatgpt-text">
+              Ready when you are.
+            </h1>
+          </div>
+
+          {/* Input Container - Exact styling */}
+          <div className="chatgpt-input-container rounded-3xl p-4">
+            <form onSubmit={handleSubmit} className="relative">
+              <div className="flex items-center gap-3">
+                {/* Plus Button */}
+                <button
+                  type="button"
+                  className="flex-shrink-0 p-2 rounded-lg chatgpt-hover"
+                >
+                  <svg
+                    className="w-5 h-5 chatgpt-text-muted"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M12 4v16m8-8H4"
+                    />
+                  </svg>
+                </button>
+
+                {/* Input Field */}
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Ask anything"
+                  className="flex-1 bg-transparent chatgpt-text placeholder:chatgpt-text-muted outline-none text-base"
+                />
+
+                {/* Tools Button */}
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg chatgpt-hover"
+                >
+                  <svg
+                    className="w-4 h-4 chatgpt-text-muted"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
+                    />
+                  </svg>
+                  <span className="text-sm chatgpt-text-muted">Tools</span>
+                </button>
+
+                {/* Voice Button */}
+                <button
+                  type="button"
+                  className="flex-shrink-0 p-2 rounded-lg chatgpt-hover"
+                >
+                  <svg
+                    className="w-5 h-5 chatgpt-text-muted"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                    />
+                  </svg>
+                </button>
+
+                {/* Send Button */}
+                {input.trim() && (
+                  <button
+                    type="submit"
+                    className="flex-shrink-0 p-2 rounded-lg bg-white text-black hover:bg-gray-200 transition-colors"
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                      />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -11,7 +11,7 @@ export default function Home() {
 
   return (
     <ThemeProvider>
-      <div className="h-screen flex bg-gray-100 dark:bg-gray-900">
+      <div className="h-screen flex chatgpt-main">
         {/* Sidebar */}
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 

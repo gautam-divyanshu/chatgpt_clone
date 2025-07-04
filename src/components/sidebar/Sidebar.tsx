@@ -68,41 +68,36 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         {/* Top Section */}
         <div className="flex-shrink-0 mb-4 px-3 pt-3">
           {/* Header */}
-          <div
-            className={`flex items-center transition-all duration-300 ${
-              isOpen ? "justify-between" : "justify-center"
-            }`}
-          >
-            {isOpen ? (
-              /* When Open - Separate ChatGPT icon and Toggle button */
-              <>
-                <div className="flex items-center">
-                  <ChatGPTIcon />
-                </div>
-                <button
-                  onClick={onToggle}
-                  className="rounded-lg pr-1 chatgpt-hover opacity-100 transition-opacity duration-300"
-                >
-                  <ToggleIcon />
-                </button>
-              </>
-            ) : (
-              /* When Closed - Aligned icons with hover effect */
-              <div className="relative flex items-center group/header">
-                {/* ChatGPT Icon */}
-                <div className="transition-all duration-300 group-hover/header:opacity-0">
-                  <ChatGPTIcon />
-                </div>
-
-                {/* Toggle Button - Positioned absolutely to align with ChatGPT icon */}
-                <button
-                  onClick={onToggle}
-                  className="absolute inset-0 rounded-lg chatgpt-hover transition-all duration-300 opacity-0 group-hover/header:opacity-100"
-                >
-                  <ToggleIcon />
-                </button>
+          <div className="relative w-full group/header">
+            {/* Container that maintains the layout */}
+            <div
+              className={`flex items-center h-8 transition-all duration-500 ease-in-out ${
+                isOpen ? "justify-between" : "justify-center"
+              }`}
+            >
+              {/* ChatGPT Icon */}
+              <div
+                className={`transition-opacity duration-300 ${
+                  isOpen
+                    ? "opacity-100"
+                    : "opacity-100 group-hover/header:opacity-0"
+                }`}
+              >
+                <ChatGPTIcon />
               </div>
-            )}
+
+              {/* Toggle Button - Only visible when open or on hover when closed */}
+              <button
+                onClick={onToggle}
+                className={`rounded-lg chatgpt-hover transition-all duration-500 ease-in-out ${
+                  isOpen
+                    ? "opacity-100 pr-1"
+                    : "opacity-0 group-hover/header:opacity-100 absolute left-1/2 transform -translate-x-1/2"
+                }`}
+              >
+                <ToggleIcon />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -214,7 +209,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         )}
 
         {/* Bottom Section */}
-        <div className="flex-shrink-0 p-3 border-t border-white/10">
+        <div className="flex-shrink-0 p-3 ">
           <button
             className={`
             w-full flex items-center rounded-lg chatgpt-hover text-left transition-all duration-300

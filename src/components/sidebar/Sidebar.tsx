@@ -50,33 +50,58 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       {/* Sidebar - Smooth width transition like real ChatGPT */}
       <div
         className={`
-        fixed md:relative inset-y-0 left-0 z-50 h-full chatgpt-sidebar flex flex-col
+        fixed md:relative inset-y-0 left-0 z-50 h-full flex flex-col group
         transition-all duration-300 ease-in-out 
-        ${isOpen ? "w-64 translate-x-0" : "w-16 translate-x-0 md:translate-x-0"}
+        ${
+          isOpen
+            ? "w-64 translate-x-0 chatgpt-sidebar"
+            : "w-16 translate-x-0 md:translate-x-0"
+        }
         ${!isOpen ? "-translate-x-full md:translate-x-0" : ""}
+        ${!isOpen ? "bg-[#212121] hover:chatgpt-sidebar" : "chatgpt-sidebar"}
       `}
+        style={{
+          backgroundColor: !isOpen ? "#212121" : undefined,
+          transition: "all 0.3s ease-in-out, background-color 0.3s ease-in-out",
+        }}
       >
         {/* Top Section */}
-        <div className="flex-shrink-0 mb-4 px-3 pt-3 ">
+        <div className="flex-shrink-0 mb-4 px-3 pt-3">
           {/* Header */}
           <div
             className={`flex items-center transition-all duration-300 ${
               isOpen ? "justify-between" : "justify-center"
             }`}
           >
-            {/* ChatGPT Icon - Always visible */}
-            <div className="flex items-center ">
-              <ChatGPTIcon />
-            </div>
+            {isOpen ? (
+              /* When Open - Separate ChatGPT icon and Toggle button */
+              <>
+                <div className="flex items-center">
+                  <ChatGPTIcon />
+                </div>
+                <button
+                  onClick={onToggle}
+                  className="rounded-lg pr-1 chatgpt-hover opacity-100 transition-opacity duration-300"
+                >
+                  <ToggleIcon />
+                </button>
+              </>
+            ) : (
+              /* When Closed - Aligned icons with hover effect */
+              <div className="relative flex items-center group/header">
+                {/* ChatGPT Icon */}
+                <div className="transition-all duration-300 group-hover/header:opacity-0">
+                  <ChatGPTIcon />
+                </div>
 
-            {/* Toggle Button - Show when expanded */}
-            {isOpen && (
-              <button
-                onClick={onToggle}
-                className=" rounded-lg pr-1 chatgpt-hover opacity-100 transition-opacity duration-300"
-              >
-                <ToggleIcon />
-              </button>
+                {/* Toggle Button - Positioned absolutely to align with ChatGPT icon */}
+                <button
+                  onClick={onToggle}
+                  className="absolute inset-0 rounded-lg chatgpt-hover transition-all duration-300 opacity-0 group-hover/header:opacity-100"
+                >
+                  <ToggleIcon />
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -86,7 +111,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           {/* New Chat Button */}
           <button
             className={`
-            w-full flex items-center rounded-lg  chatgpt-hover text-left transition-all duration-300
+            w-full flex items-center rounded-lg chatgpt-hover text-left transition-all duration-300
             ${isOpen ? "gap-2 px-3 py-2.5" : "justify-center p-2.5"}
           `}
           >
@@ -146,55 +171,31 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           </button>
         </div>
         <div>
-          {/* Sora */}
-          <button
-            className={`
-              w-full flex items-center rounded-lg chatgpt-hover text-left transition-all duration-300
-              ${isOpen ? "gap-2 px-3 py-2" : "justify-center p-2"}
-            `}
-          >
-            <SoraIcon />
-            <span
-              className={`
-                chatgpt-text text-sm whitespace-nowrap transition-all duration-300
-                ${
-                  isOpen
-                    ? "opacity-100 w-auto"
-                    : "opacity-0 w-0 overflow-hidden"
-                }
-              `}
-            >
-              Sora
-            </span>
-          </button>
+          {/* Sora - Only show when expanded */}
+          {isOpen && (
+            <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg chatgpt-hover text-left transition-all duration-300">
+              <SoraIcon />
+              <span className="chatgpt-text text-sm whitespace-nowrap">
+                Sora
+              </span>
+            </button>
+          )}
 
-          {/* GPTs */}
-          <button
-            className={`
-              w-full flex items-center rounded-lg chatgpt-hover text-left transition-all duration-300
-              ${isOpen ? "gap-2 px-3 py-2" : "justify-center p-2"}
-            `}
-          >
-            <GPTsIcon />
-            <span
-              className={`
-                chatgpt-text text-sm whitespace-nowrap transition-all duration-300
-                ${
-                  isOpen
-                    ? "opacity-100 w-auto"
-                    : "opacity-0 w-0 overflow-hidden"
-                }
-              `}
-            >
-              GPTs
-            </span>
-          </button>
+          {/* GPTs - Only show when expanded */}
+          {isOpen && (
+            <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg chatgpt-hover text-left transition-all duration-300">
+              <GPTsIcon />
+              <span className="chatgpt-text text-sm whitespace-nowrap">
+                GPTs
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Chats Section - Only show when expanded */}
         {isOpen && (
-          <div className="flex-1  overflow-y-auto">
-            <div className="text-2xs chatgpt-text-muted font-medium px-3 pt-6 ">
+          <div className="flex-1 overflow-y-auto">
+            <div className="text-2xs chatgpt-text-muted font-medium px-3 pt-6">
               Chats
             </div>
             <div className="space-y-1">
@@ -220,9 +221,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
             ${isOpen ? "gap-3 px-3 py-2" : "justify-center p-2"}
           `}
           >
-            <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-              U
-            </div>
             <span
               className={`
               chatgpt-text text-sm whitespace-nowrap transition-all duration-300

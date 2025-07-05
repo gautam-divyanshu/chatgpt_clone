@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { ChatInput } from "./ChatInput";
 
 interface ChatMessage {
@@ -8,15 +8,98 @@ interface ChatMessage {
   content: string;
   isUser: boolean;
   timestamp: string;
+  isStreaming?: boolean;
 }
 
 export function ChatGPTMain() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const streamingControllerRef = useRef<AbortController | null>(null);
+
+  // Check if user is scrolled to bottom
+  const isScrolledToBottom = () => {
+    if (!chatContainerRef.current) return true;
+    const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+    return Math.abs(scrollHeight - clientHeight - scrollTop) < 50; // 50px threshold
+  };
+
+  // Handle scroll events to detect manual scrolling
+  const handleScroll = () => {
+    setShouldAutoScroll(isScrolledToBottom());
+  };
+
+  // Auto-scroll to bottom when new messages arrive (only if user is at bottom)
+  const scrollToBottom = useCallback(() => {
+    if (shouldAutoScroll) {
+      messagesEndRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "end",
+      });
+    }
+  }, [shouldAutoScroll]);
+
+  // Scroll to bottom whenever messages change (but respect user scroll position)
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, shouldAutoScroll, scrollToBottom]);
+
+  // Mock streaming API function
+  const streamResponse = async (prompt: string, messageId: string) => {
+    const controller = new AbortController();
+    streamingControllerRef.current = controller;
+
+    // Mock response text that will be streamed
+    const mockResponse = `This is a simulated streaming response to: "${prompt}"\n\nI'm demonstrating real-time message streaming in this ChatGPT clone. Each word appears incrementally as if it's being typed in real-time. This creates a more engaging and natural conversation experience.\n\nThe streaming implementation handles:\n• Real-time text chunks\n• Auto-scrolling to follow the conversation\n• Graceful cancellation if needed\n• Smooth typing animation effect\n\nYou can scroll up during streaming to read previous messages, and the auto-scroll will pause until you return to the bottom. This gives you full control over the viewing experience while still maintaining the smooth streaming effect.\n\nThe implementation respects user intent - if you're reading something above, it won't force you back to the bottom. But when you're ready to follow along with the new content, just scroll to the bottom and auto-scroll will resume.`;
+
+    const words = mockResponse.split(" ");
+    let currentContent = "";
+
+    try {
+      for (let i = 0; i < words.length; i++) {
+        if (controller.signal.aborted) {
+          break;
+        }
+
+        currentContent += (i > 0 ? " " : "") + words[i];
+
+        // Update the streaming message
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === messageId ? { ...msg, content: currentContent } : msg
+          )
+        );
+
+        // Add delay between words to simulate streaming
+        await new Promise((resolve) =>
+          setTimeout(resolve, 30 + Math.random() * 20)
+        );
+      }
+
+      // Mark streaming as complete
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId ? { ...msg, isStreaming: false } : msg
+        )
+      );
+    } catch {
+      console.log("Streaming cancelled or failed");
+    } finally {
+      setIsLoading(false);
+      streamingControllerRef.current = null;
+    }
+  };
 
   const handleSendMessage = async (content: string) => {
     if (!content.trim() || isLoading) return;
+
+    // Cancel any existing stream
+    if (streamingControllerRef.current) {
+      streamingControllerRef.current.abort();
+    }
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -28,19 +111,22 @@ export function ChatGPTMain() {
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
+    setShouldAutoScroll(true); // Reset auto-scroll for new conversation
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        content: `This is a simulated response to: "${content}"\n\nI'm a demo ChatGPT clone with the exact UI design. In a real implementation, this would connect to an AI API.`,
-        isUser: false,
-        timestamp: new Date().toLocaleTimeString(),
-      };
+    // Create AI message placeholder for streaming
+    const aiMessageId = (Date.now() + 1).toString();
+    const aiMessage: ChatMessage = {
+      id: aiMessageId,
+      content: "",
+      isUser: false,
+      timestamp: new Date().toLocaleTimeString(),
+      isStreaming: true,
+    };
 
-      setMessages((prev) => [...prev, aiMessage]);
-      setIsLoading(false);
-    }, 1500);
+    setMessages((prev) => [...prev, aiMessage]);
+
+    // Start streaming response
+    await streamResponse(content, aiMessageId);
   };
 
   const handleExampleClick = (prompt: string) => {
@@ -102,7 +188,7 @@ export function ChatGPTMain() {
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0">
         {messages.length === 0 ? (
           /* Welcome Screen */
           <div className="flex-1 flex items-center justify-center px-6">
@@ -257,24 +343,30 @@ export function ChatGPTMain() {
             </div>
           </div>
         ) : (
-          /* Messages */
-          <div className="flex-1 overflow-y-auto">
-            <div>
+          /* Messages - Scrollable Container */
+          <div
+            ref={chatContainerRef}
+            onScroll={handleScroll}
+            className="flex-1 overflow-y-auto"
+            style={{
+              scrollbarWidth: "thin",
+              scrollbarColor: "#6b7280 transparent",
+            }}
+          >
+            <div className="pb-4">
               {messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`px-4 py-6 ${
-                    message.isUser && "bg-transparent"
-                  }`}
+                  className={`px-4 py-6 ${message.isUser && "bg-transparent"}`}
                 >
                   <div className="max-w-3xl mx-auto">
                     {message.isUser ? (
-                      // User message - moved to right with edit/copy buttons below
+                      // User message - right aligned with edit/copy buttons below
                       <div className="flex flex-col items-end">
                         <div className="bg-[#2f2f2f] rounded-3xl px-4 py-3 max-w-fit">
-                          <p className="text-[#ececec] text-base leading-7">
+                          <pre className="text-[#ececec] text-base leading-7 whitespace-pre-wrap font-sans">
                             {message.content}
-                          </p>
+                          </pre>
                         </div>
                         <div className="flex gap-2 mt-2">
                           <button className="p-2 hover:bg-white/10 rounded-lg transition-colors">
@@ -310,10 +402,16 @@ export function ChatGPTMain() {
                         </div>
                       </div>
                     ) : (
-                      // AI message content - clean text without background
+                      // AI message content with streaming support
                       <div className="text-[#ececec] text-base leading-7 space-y-4">
                         <div className="whitespace-pre-wrap">
                           {message.content}
+                          {message.isStreaming && (
+                            <span
+                              className="inline-block w-2 h-5 ml-1 animate-pulse"
+                              style={{ backgroundColor: "#ececec" }}
+                            ></span>
+                          )}
                         </div>
                       </div>
                     )}
@@ -321,23 +419,29 @@ export function ChatGPTMain() {
                 </div>
               ))}
 
-              {isLoading && (
-                <div className="px-4 py-6 bg-[#212121]">
-                  <div className="max-w-3xl mx-auto">
-                    <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                      <div
+              {/* Loading state */}
+              {isLoading &&
+                messages.length > 0 &&
+                !messages[messages.length - 1]?.isStreaming && (
+                  <div className="px-4 py-6 bg-[#212121]">
+                    <div className="max-w-3xl mx-auto">
+                      <div className="flex gap-1">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                        <div
                           className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                        style={{ animationDelay: "0.1s" }}
-                      ></div>
-                      <div
+                          style={{ animationDelay: "0.1s" }}
+                        ></div>
+                        <div
                           className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                        style={{ animationDelay: "0.2s" }}
-                      ></div>
+                          style={{ animationDelay: "0.2s" }}
+                        ></div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+
+              {/* Scroll anchor */}
+              <div ref={messagesEndRef} />
             </div>
           </div>
         )}

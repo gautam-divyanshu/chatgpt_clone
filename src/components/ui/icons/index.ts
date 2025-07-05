@@ -8,7 +8,15 @@ export {
   GPTsIcon,
   SearchIcon,
 } from "./CommonIcons";
+export {
+  PlusIcon,
+  ToolsIcon,
+  MicrophoneIcon,
+  SendIcon,
+  UpArrowIcon,
+} from "./ChatIcons";
 
 // Re-export for convenience
 export * from "./ChatGPTIcon";
 export * from "./CommonIcons";
+export * from "./ChatIcons";

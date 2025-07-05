@@ -270,63 +270,81 @@ export function ChatGPTMain() {
         ) : (
           /* Messages */
           <div className="flex-1 overflow-y-auto">
-            <div className="divide-y divide-white/10">
+            <div>
               {messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`p-6 ${message.isUser ? "bg-white/5" : ""}`}
+                  className={`px-4 py-6 ${
+                    message.isUser && "bg-transparent"
+                  }`}
                 >
-                  <div className="max-w-3xl mx-auto flex gap-4">
-                    <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${
-                        message.isUser ? "bg-blue-500" : "bg-green-500"
-                      }`}
-                    >
-                      {message.isUser ? "U" : "AI"}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="font-medium text-sm chatgpt-text">
-                          {message.isUser ? "You" : "ChatGPT"}
-                        </span>
-                        <span className="text-xs chatgpt-text-muted">
-                          {message.timestamp}
-                        </span>
+                  <div className="max-w-3xl mx-auto">
+                    {message.isUser ? (
+                      // User message - moved to right with edit/copy buttons below
+                      <div className="flex flex-col items-end">
+                        <div className="bg-[#2f2f2f] rounded-3xl px-4 py-3 max-w-fit">
+                          <p className="text-[#ececec] text-base leading-7">
+                            {message.content}
+                          </p>
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          <button className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                            <svg
+                              className="w-4 h-4 text-[#8e8ea0]"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                              />
+                            </svg>
+                          </button>
+                          <button className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                            <svg
+                              className="w-4 h-4 text-[#8e8ea0]"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                              />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
-                      <div className="chatgpt-text whitespace-pre-wrap">
-                        {message.content}
+                    ) : (
+                      // AI message content - clean text without background
+                      <div className="text-[#ececec] text-base leading-7 space-y-4">
+                        <div className="whitespace-pre-wrap">
+                          {message.content}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               ))}
 
               {isLoading && (
-                <div className="p-6">
-                  <div className="max-w-3xl mx-auto flex gap-4">
-                    <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white text-sm font-medium">
-                      AI
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="font-medium text-sm chatgpt-text">
-                          ChatGPT
-                        </span>
-                        <span className="text-xs chatgpt-text-muted">
-                          typing...
-                        </span>
-                      </div>
-                      <div className="flex gap-1">
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                        <div
+                <div className="px-4 py-6 bg-[#212121]">
+                  <div className="max-w-3xl mx-auto">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                      <div
                           className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                          style={{ animationDelay: "0.1s" }}
-                        ></div>
-                        <div
+                        style={{ animationDelay: "0.1s" }}
+                      ></div>
+                      <div
                           className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                          style={{ animationDelay: "0.2s" }}
-                        ></div>
-                      </div>
+                        style={{ animationDelay: "0.2s" }}
+                      ></div>
                     </div>
                   </div>
                 </div>

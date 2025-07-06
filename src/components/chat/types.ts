@@ -1,3 +1,5 @@
+import { UploadedFile } from './upload-types';
+
 export interface ChatMessage {
   id: string;
   content: string;
@@ -9,6 +11,7 @@ export interface ChatMessage {
   status?: 'sending' | 'sent' | 'error' | 'retrying';
   errorType?: 'network' | 'rate_limit' | 'auth' | 'server' | 'timeout';
   retryCount?: number;
+  attachments?: UploadedFile[];
 }
 
 export interface EditableMessageProps {

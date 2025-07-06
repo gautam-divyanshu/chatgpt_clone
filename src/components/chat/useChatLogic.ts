@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { ChatMessage } from "./types";
+import { UploadedFile } from "./upload-types";
 import { streamResponse } from "./realApi";
 
 export function useChatLogic() {
@@ -63,8 +64,8 @@ export function useChatLogic() {
     );
   };
 
-  const handleSendMessage = async (content: string) => {
-    if (!content.trim() || isLoading) return;
+  const handleSendMessage = async (content: string, attachments?: UploadedFile[]) => {
+    if ((!content.trim() && (!attachments || attachments.length === 0)) || isLoading) return;
 
     // Cancel any ongoing streaming
     if (streamingControllerRef.current) {
@@ -81,6 +82,7 @@ export function useChatLogic() {
       isUser: true,
       timestamp: new Date().toLocaleTimeString(),
       status: "sent",
+      attachments: attachments || [],
     };
 
     setMessages((prev) => [...prev, userMessage]);

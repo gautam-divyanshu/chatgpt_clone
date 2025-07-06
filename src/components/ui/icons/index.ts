@@ -14,6 +14,7 @@ export {
   MicrophoneIcon,
   SendIcon,
   UpArrowIcon,
+  StopIcon,
 } from "./ChatIcons";
 
 // Re-export for convenience

@@ -106,3 +106,23 @@ export const UpArrowIcon: React.FC<IconProps> = ({
     </svg>
   );
 };
+
+export const StopIcon: React.FC<IconProps> = ({
+  className = "",
+  size = 16,
+  width = size,
+  height = size,
+}) => {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="4" y="4" width="12" height="12" rx="2" />
+    </svg>
+  );
+};

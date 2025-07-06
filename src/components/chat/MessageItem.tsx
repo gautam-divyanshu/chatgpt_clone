@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ChatMessage } from "./types";
 import { EditableMessage } from "./EditableMessage";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import { CompactFilePreview } from "./CompactFilePreview";
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -58,9 +59,25 @@ export function MessageItem({
               // Display mode
               <>
                 <div className="bg-[#2f2f2f] rounded-3xl px-4 py-3 max-w-fit">
-                  <pre className="text-[#ececec] text-base leading-7 whitespace-pre-wrap font-sans">
-                    {message.content}
-                  </pre>
+                  {/* Attachments Display - using clean compact previews */}
+                  {message.attachments && message.attachments.length > 0 && (
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {message.attachments.map((file) => (
+                        <CompactFilePreview
+                          key={file.id}
+                          file={file}
+                          onRemove={() => {}} // No remove in message history
+                        />
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Message Content */}
+                  {message.content && (
+                    <pre className="text-[#ececec] text-base leading-7 whitespace-pre-wrap font-sans">
+                      {message.content}
+                    </pre>
+                  )}
                 </div>
                 <div className="flex gap-2 mt-2">
                   <button

@@ -2,14 +2,20 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { ChatMessage } from "./types";
 import { UploadedFile } from "./upload-types";
 import { streamResponse } from "./realApi";
-import { ConversationManager, type ChatMessage as DbChatMessage, type ChatAttachment } from "@/lib/conversationManager";
+import {
+  ConversationManager,
+  type ChatMessage as DbChatMessage,
+  type ChatAttachment,
+} from "@/lib/conversationManager";
 
 export function useChatLogic(conversationId?: string | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(conversationId || null);
+  const [currentConversationId, setCurrentConversationId] = useState<
+    string | null
+  >(conversationId || null);
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -17,136 +23,180 @@ export function useChatLogic(conversationId?: string | null) {
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Transform database message to component message
-  const transformDbMessage = useCallback((dbMessage: DbChatMessage): ChatMessage => {
-    return {
-      id: dbMessage.id,
-      content: dbMessage.content,
-      isUser: dbMessage.isUser,
-      timestamp: new Date(dbMessage.timestamp).toLocaleTimeString(),
-      status: "sent",
-      attachments: dbMessage.attachments?.map((att: ChatAttachment) => ({
-        id: att.cloudinaryPublicId,
-        url: att.cloudinaryUrl,
-        originalName: att.originalName,
-        size: att.fileSize,
-        type: att.fileType,
-        isImage: att.isImage,
-        isDocument: !att.isImage,
-        width: null,
-        height: null,
-        format: att.fileType.split('/')[1] || 'unknown',
-        createdAt: new Date(att.uploadedAt).toISOString()
-      })) || []
-    };
-  }, []);
+  const transformDbMessage = useCallback(
+    (dbMessage: DbChatMessage): ChatMessage => {
+      return {
+        id: dbMessage.id,
+        content: dbMessage.content,
+        isUser: dbMessage.isUser,
+        timestamp: new Date(dbMessage.timestamp).toLocaleTimeString(),
+        status: "sent",
+        attachments:
+          dbMessage.attachments?.map((att: ChatAttachment) => ({
+            id: att.cloudinaryPublicId,
+            url: att.cloudinaryUrl,
+            originalName: att.originalName,
+            size: att.fileSize,
+            type: att.fileType,
+            isImage: att.isImage,
+            isDocument: !att.isImage,
+            width: null,
+            height: null,
+            format: att.fileType.split("/")[1] || "unknown",
+            createdAt: new Date(att.uploadedAt).toISOString(),
+          })) || [],
+      };
+    },
+    []
+  );
 
   // Transform component message to database message
-  const transformToDbMessage = useCallback((message: ChatMessage): DbChatMessage => {
-    return {
-      id: message.id,
-      content: message.content,
-      isUser: message.isUser,
-      timestamp: new Date().toISOString(),
-      attachments: message.attachments?.map((att: UploadedFile) => ({
-        originalName: att.originalName,
-        cloudinaryUrl: att.url,
-        cloudinaryPublicId: att.id,
-        fileType: att.type,
-        fileSize: att.size,
-        isImage: att.isImage,
-        uploadedAt: new Date(att.createdAt)
-      })) || []
-    };
-  }, []);
+  const transformToDbMessage = useCallback(
+    (message: ChatMessage): DbChatMessage => {
+      return {
+        id: message.id,
+        content: message.content,
+        isUser: message.isUser,
+        timestamp: new Date().toISOString(),
+        attachments:
+          message.attachments?.map((att: UploadedFile) => ({
+            originalName: att.originalName,
+            cloudinaryUrl: att.url,
+            cloudinaryPublicId: att.id,
+            fileType: att.type,
+            fileSize: att.size,
+            isImage: att.isImage,
+            uploadedAt: new Date(att.createdAt),
+          })) || [],
+      };
+    },
+    []
+  );
 
   // Auto-save messages to database with debouncing
-  const autoSaveMessages = useCallback(async (newMessages: ChatMessage[], convId?: string) => {
-    if (!convId || newMessages.length === 0) return;
+  const autoSaveMessages = useCallback(
+    async (newMessages: ChatMessage[], convId?: string) => {
+      if (!convId || newMessages.length === 0) return;
 
-    // Clear existing timeout
-    if (autoSaveTimeoutRef.current) {
-      clearTimeout(autoSaveTimeoutRef.current);
-    }
-
-    // Debounce auto-save by 1 second (reduced from 2 seconds for better responsiveness)
-    autoSaveTimeoutRef.current = setTimeout(async () => {
-      try {
-        // Only save non-streaming messages
-        const completedMessages = newMessages.filter(msg => !msg.isStreaming && msg.content.trim());
-        if (completedMessages.length > 0) {
-          const dbMessages = completedMessages.map(transformToDbMessage);
-          await ConversationManager.updateConversation(convId, dbMessages);
-          console.log('💾 Auto-saved conversation:', convId, 'with', completedMessages.length, 'messages');
-        }
-      } catch (error) {
-        console.error('Auto-save failed:', error);
+      // Clear existing timeout
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
       }
-    }, 1000);
-  }, [transformToDbMessage]);
+
+      // Debounce auto-save by 1 second (reduced from 2 seconds for better responsiveness)
+      autoSaveTimeoutRef.current = setTimeout(async () => {
+        try {
+          // Only save non-streaming messages
+          const completedMessages = newMessages.filter(
+            (msg) => !msg.isStreaming && msg.content.trim()
+          );
+          if (completedMessages.length > 0) {
+            const dbMessages = completedMessages.map(transformToDbMessage);
+            await ConversationManager.updateConversation(convId, dbMessages);
+            console.log(
+              "💾 Auto-saved conversation:",
+              convId,
+              "with",
+              completedMessages.length,
+              "messages"
+            );
+          }
+        } catch (error) {
+          console.error("Auto-save failed:", error);
+        }
+      }, 1000);
+    },
+    [transformToDbMessage]
+  );
 
   // Create new conversation
-  const createNewConversation = useCallback(async (firstMessage?: ChatMessage) => {
-    try {
-      const dbFirstMessage = firstMessage ? transformToDbMessage(firstMessage) : undefined;
-      const conversation = await ConversationManager.createNewConversation(undefined, dbFirstMessage);
-      
-      if (conversation) {
-        setCurrentConversationId(conversation.id);
-        console.log('✅ Created new conversation:', conversation.id);
-        return conversation.id;
+  const createNewConversation = useCallback(
+    async (firstMessage?: ChatMessage) => {
+      try {
+        const dbFirstMessage = firstMessage
+          ? transformToDbMessage(firstMessage)
+          : undefined;
+        const conversation = await ConversationManager.createNewConversation(
+          undefined,
+          dbFirstMessage
+        );
+
+        if (conversation) {
+          setCurrentConversationId(conversation.id);
+          console.log("✅ Created new conversation:", conversation.id);
+          return conversation.id;
+        }
+      } catch (error) {
+        console.error("Failed to create new conversation:", error);
       }
-    } catch (error) {
-      console.error('Failed to create new conversation:', error);
-    }
-    return null;
-  }, [transformToDbMessage]);
+      return null;
+    },
+    [transformToDbMessage]
+  );
 
   // Load conversation from database
-  const loadConversation = useCallback(async (convId: string) => {
-    if (!convId) return;
-    
-    setIsLoadingConversation(true);
-    try {
-      const conversation = await ConversationManager.getConversation(convId);
-      if (conversation && conversation.messages) {
-        const transformedMessages = conversation.messages.map(transformDbMessage);
-        setMessages(transformedMessages);
-        setCurrentConversationId(convId);
-        console.log('✅ Loaded conversation:', convId, 'with', transformedMessages.length, 'messages');
+  const loadConversation = useCallback(
+    async (convId: string) => {
+      if (!convId) return;
+
+      setIsLoadingConversation(true);
+      try {
+        const conversation = await ConversationManager.getConversation(convId);
+        if (conversation && conversation.messages) {
+          const transformedMessages =
+            conversation.messages.map(transformDbMessage);
+          setMessages(transformedMessages);
+          setCurrentConversationId(convId);
+          console.log(
+            "✅ Loaded conversation:",
+            convId,
+            "with",
+            transformedMessages.length,
+            "messages"
+          );
+        }
+      } catch (error) {
+        console.error("Failed to load conversation:", error);
+      } finally {
+        setIsLoadingConversation(false);
       }
-    } catch (error) {
-      console.error('Failed to load conversation:', error);
-    } finally {
-      setIsLoadingConversation(false);
-    }
-  }, [transformDbMessage]);
+    },
+    [transformDbMessage]
+  );
 
   // Switch to a different conversation
-  const switchConversation = useCallback(async (convId: string | null) => {
-    if (convId === currentConversationId) return;
+  const switchConversation = useCallback(
+    async (convId: string | null) => {
+      if (convId === currentConversationId) return;
 
-    // Don't switch if we're currently loading a response
-    if (isLoading) {
-      console.log('🔄 Skipping conversation switch - currently loading response');
-      return;
-    }
+      // Don't switch if we're currently loading a response
+      if (isLoading) {
+        console.log(
+          "🔄 Skipping conversation switch - currently loading response"
+        );
+        return;
+      }
 
-    if (convId) {
-      await loadConversation(convId);
-    } else {
-      // Start fresh conversation
-      setMessages([]);
-      setCurrentConversationId(null);
-    }
-  }, [currentConversationId, loadConversation, isLoading]);
+      if (convId) {
+        await loadConversation(convId);
+      } else {
+        // Start fresh conversation
+        setMessages([]);
+        setCurrentConversationId(null);
+      }
+    },
+    [currentConversationId, loadConversation, isLoading]
+  );
 
   // Auto-save when messages change - This will catch both user messages AND AI responses
   useEffect(() => {
     if (currentConversationId && messages.length > 0) {
       // Check if there are any completed (non-streaming) messages
-      const hasCompletedMessages = messages.some(msg => !msg.isStreaming && msg.content.trim());
+      const hasCompletedMessages = messages.some(
+        (msg) => !msg.isStreaming && msg.content.trim()
+      );
       if (hasCompletedMessages) {
-        console.log('🔄 Triggering auto-save for', messages.length, 'messages');
+        console.log("🔄 Triggering auto-save for", messages.length, "messages");
         autoSaveMessages(messages, currentConversationId);
       }
     }
@@ -157,8 +207,12 @@ export function useChatLogic(conversationId?: string | null) {
     if (!isLoading && currentConversationId && messages.length > 0) {
       // AI response just completed, make sure it's saved
       const lastMessage = messages[messages.length - 1];
-      if (!lastMessage.isUser && !lastMessage.isStreaming && lastMessage.content.trim()) {
-        console.log('🔄 AI response completed, force saving...');
+      if (
+        !lastMessage.isUser &&
+        !lastMessage.isStreaming &&
+        lastMessage.content.trim()
+      ) {
+        console.log("🔄 AI response completed, force saving...");
         autoSaveMessages(messages, currentConversationId);
       }
     }
@@ -214,8 +268,15 @@ export function useChatLogic(conversationId?: string | null) {
     );
   };
 
-  const handleSendMessage = async (content: string, attachments?: UploadedFile[]) => {
-    if ((!content.trim() && (!attachments || attachments.length === 0)) || isLoading) return;
+  const handleSendMessage = async (
+    content: string,
+    attachments?: UploadedFile[]
+  ) => {
+    if (
+      (!content.trim() && (!attachments || attachments.length === 0)) ||
+      isLoading
+    )
+      return;
 
     console.log("=== SENDING MESSAGE ===");
     console.log("Content:", content);
@@ -243,12 +304,12 @@ export function useChatLogic(conversationId?: string | null) {
     // Create new conversation if none exists
     let convId = currentConversationId;
     let updatedMessages = messages;
-    
+
     if (!convId) {
-      console.log('🔄 Creating new conversation...');
+      console.log("🔄 Creating new conversation...");
       convId = await createNewConversation(userMessage);
       if (!convId) {
-        console.error('Failed to create conversation');
+        console.error("Failed to create conversation");
         return;
       }
       // Add user message to state
@@ -264,7 +325,9 @@ export function useChatLogic(conversationId?: string | null) {
     setIsLoading(true);
     setShouldAutoScroll(true);
 
-    const aiMessageId = `msg_${Date.now() + 1}_${Math.random().toString(36).substr(2, 9)}`;
+    const aiMessageId = `msg_${Date.now() + 1}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
     const aiMessage: ChatMessage = {
       id: aiMessageId,
       content: "",
@@ -279,7 +342,7 @@ export function useChatLogic(conversationId?: string | null) {
     const controller = new AbortController();
     streamingControllerRef.current = controller;
 
-    // Build conversation history - for both new and existing conversations, 
+    // Build conversation history - for both new and existing conversations,
     // we want to include all messages up to this point
     const conversationHistory = updatedMessages;
 
@@ -288,12 +351,15 @@ export function useChatLogic(conversationId?: string | null) {
     console.log("Current conversation ID:", currentConversationId);
     console.log("Updated messages:", updatedMessages.length);
     console.log("Conversation history:", conversationHistory.length);
-    console.log("History contents:", conversationHistory.map(msg => ({
-      id: msg.id,
-      isUser: msg.isUser,
-      content: msg.content.substring(0, 50) + '...',
-      attachments: msg.attachments?.length || 0
-    })));
+    console.log(
+      "History contents:",
+      conversationHistory.map((msg) => ({
+        id: msg.id,
+        isUser: msg.isUser,
+        content: msg.content.substring(0, 50) + "...",
+        attachments: msg.attachments?.length || 0,
+      }))
+    );
 
     try {
       await streamResponse(
@@ -361,7 +427,9 @@ export function useChatLogic(conversationId?: string | null) {
     setIsLoading(true);
     setShouldAutoScroll(true);
 
-    const aiMessageId = `msg_${Date.now() + 1}_${Math.random().toString(36).substr(2, 9)}`;
+    const aiMessageId = `msg_${Date.now() + 1}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
     const aiMessage: ChatMessage = {
       id: aiMessageId,
       content: "",
@@ -505,7 +573,6 @@ export function useChatLogic(conversationId?: string | null) {
     handleStopStreaming,
     switchConversation,
     createNewConversation,
-    loadConversation
+    loadConversation,
   };
 }
-

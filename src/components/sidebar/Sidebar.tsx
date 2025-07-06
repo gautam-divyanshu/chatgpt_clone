@@ -47,18 +47,17 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         />
       )}
 
-      {/* Sidebar - Smooth width transition like real ChatGPT */}
+      {/* Sidebar - Fixed mobile animation */}
       <div
         className={`
         fixed md:relative inset-y-0 left-0 z-50 h-full flex flex-col group
-        transition-all duration-300 ease-in-out 
+        transition-all duration-300 ease-in-out border-r border-black/20
         ${
           isOpen
             ? "w-64 translate-x-0 chatgpt-sidebar"
-            : "w-16 translate-x-0 md:translate-x-0"
+            : "w-16 md:translate-x-0 -translate-x-full md:block"
         }
-        ${!isOpen ? "-translate-x-full md:translate-x-0" : ""}
-        ${!isOpen ? "bg-[#212121] hover:chatgpt-sidebar" : "chatgpt-sidebar"}
+        ${!isOpen ? "md:bg-[#212121] md:hover:chatgpt-sidebar" : "chatgpt-sidebar"}
       `}
         style={{
           backgroundColor: !isOpen ? "#212121" : undefined,

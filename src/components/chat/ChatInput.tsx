@@ -13,6 +13,7 @@ interface ChatInputProps {
   input: string;
   setInput: (value: string) => void;
   onSendMessage: (content: string) => void;
+  onStopStreaming: () => void;
   isLoading: boolean;
 }
 
@@ -20,6 +21,7 @@ export function ChatInput({
   input,
   setInput,
   onSendMessage,
+  onStopStreaming,
   isLoading,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -62,7 +64,7 @@ export function ChatInput({
   }, [input]);
 
   return (
-    <div className="px-4 py-4">
+    <div className="flex-shrink-0 px-6 py-6">
       <div className="max-w-4xl mx-auto">
         {/* Main Input Container */}
         <div className="chatgpt-input-container rounded-3xl px-4 py-3">
@@ -76,7 +78,7 @@ export function ChatInput({
               placeholder="Ask anything"
               disabled={isLoading}
               rows={1}
-              className="flex-1 bg-transparent text-white placeholder:text-gray-400 outline-none text-base border-0 resize-none min-h-[24px] leading-6"
+              className="flex-1 bg-transparent chatgpt-text placeholder:chatgpt-text-muted outline-none text-base border-0 resize-none min-h-[24px] leading-6"
               style={{
                 maxHeight: "300px",
                 scrollbarWidth: "thin",
@@ -92,7 +94,7 @@ export function ChatInput({
               {/* Plus Button */}
               <button
                 type="button"
-                className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-white/10 transition-colors text-white"
+                className="flex items-center justify-center w-8 h-8 rounded-full chatgpt-hover transition-colors chatgpt-text"
               >
                 <PlusIcon />
               </button>
@@ -100,8 +102,9 @@ export function ChatInput({
               {/* Tools Button */}
               <button
                 type="button"
-                className="flex items-center gap-2 px-3 py-2 rounded-full hover:bg-white/10 transition-colors text-white"
+                className="flex items-center gap-2 px-3 py-2 rounded-full chatgpt-hover transition-colors chatgpt-text"
               >
+             
                 <ToolsIcon />
                 <span className="text-sm">Tools</span>
               </button>
@@ -112,12 +115,31 @@ export function ChatInput({
               {/* Voice Button */}
               <button
                 type="button"
-                className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-white/10 transition-colors text-white"
+                className="flex items-center justify-center w-8 h-8 rounded-full chatgpt-hover transition-colors chatgpt-text"
               >
+           
                 <MicrophoneIcon />
               </button>
 
-              {/* Send Button (when typing) */}
+              {/* Stop Button (when AI is responding) */}
+              {isLoading && (
+                <button
+                  type="button"
+                  onClick={onStopStreaming}
+                  className="flex items-center justify-center w-8 h-8 rounded-full bg-white text-black hover:bg-gray-200 transition-colors"
+                  title="Stop generating"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <rect x="6" y="6" width="12" height="12" rx="2" />
+                  </svg>
+                </button>
+              )}
+
+              {/* Send Button (when user has typed something and not loading) */}
               {input.trim() && !isLoading && (
                 <button
                   onClick={handleSubmit}
@@ -127,8 +149,8 @@ export function ChatInput({
                 </button>
               )}
 
-              {/* Up Arrow Button (when empty) */}
-              {!input.trim() && (
+              {/* Up Arrow Button (when empty and not loading) */}
+              {!input.trim() && !isLoading && (
                 <button
                   type="button"
                   className="flex items-center justify-center w-8 h-8 rounded-full bg-[#565869] hover:bg-[#6b6d80] transition-colors text-white"
@@ -139,6 +161,11 @@ export function ChatInput({
             </div>
           </div>
         </div>
+
+        {/* Footer Text */}
+        <p className="text-center text-xs chatgpt-text-muted mt-4">
+          ChatGPT can make mistakes. Check important info.
+        </p>
       </div>
     </div>
   );

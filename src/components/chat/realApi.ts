@@ -1,100 +1,125 @@
 import { ChatMessage } from "./types";
 
+interface StreamConfig {
+  retryAttempts?: number;
+  retryDelay?: number;
+  timeoutMs?: number;
+}
+
 export const streamResponse = async (
   prompt: string,
   messageId: string,
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
   setIsLoading: React.Dispatch<React.SetStateAction<boolean>>,
   controller: AbortController,
-  conversationHistory: ChatMessage[] = []
+  conversationHistory: ChatMessage[] = [],
+  config: StreamConfig = {}
 ): Promise<void> => {
-  try {
-    // Prepare messages for API (convert to the format expected by Vercel AI SDK)
-    const apiMessages = conversationHistory
-      .filter(msg => !msg.isStreaming) // Only include completed messages
-      .map(msg => ({
-        role: msg.isUser ? 'user' as const : 'assistant' as const,
-        content: msg.content
-      }));
-    
-    // Add the current prompt
-    apiMessages.push({
-      role: 'user' as const,
-      content: prompt
-    });
+  const {
+    retryAttempts = 3,
+    retryDelay = 1000,
+    timeoutMs = 30000
+  } = config;
 
-    console.log('Sending messages to API:', apiMessages);
+  let attempt = 0;
 
-    // Call your API endpoint
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messages: apiMessages
-      }),
-      signal: controller.signal
-    });
+  const attemptRequest = async (): Promise<void> => {
+    try {
+      // Prepare conversation context with smart truncation
+      const apiMessages = prepareConversationContext(conversationHistory, prompt);
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
+      console.log(`Attempt ${attempt + 1}: Sending ${apiMessages.length} messages to API`);
 
-    if (!response.body) {
-      throw new Error('No response body');
-    }
+      // Create timeout promise
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout')), timeoutMs);
+      });
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let currentContent = "";
+      // Create fetch promise
+      const fetchPromise = fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: apiMessages
+        }),
+        signal: controller.signal
+      });
 
-    while (true) {
-      if (controller.signal.aborted) break;
+      // Race between fetch and timeout
+      const response = await Promise.race([fetchPromise, timeoutPromise]);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`HTTP ${response.status}: ${errorData.error || 'Unknown error'}`);
+      }
+
+      if (!response.body) {
+        throw new Error('No response body');
+      }
+
+      await processStream(response.body, messageId, setMessages, controller);
+
+    } catch (error: any) {
+      // Handle abort differently - it's not a real error
+      if (error.name === 'AbortError' || controller.signal.aborted) {
+        console.log('Stream was cancelled by user');
+        return; // Don't retry on user cancellation
+      }
+
+      console.error(`Attempt ${attempt + 1} failed:`, error);
       
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n');
-      
-      for (const line of lines) {
-        if (controller.signal.aborted) break;
+      // Check if we should retry
+      if (attempt < retryAttempts - 1 && 
+          !controller.signal.aborted && 
+          isRetryableError(error)) {
         
-        if (line.startsWith('0:')) {
-          // This is text content
-          const content = line.slice(2).replace(/^"(.*)"$/, '$1');
-          if (content) {
-            currentContent += content;
-            
-            setMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === messageId 
-                  ? { ...msg, content: currentContent } 
-                  : msg
-              )
-            );
-          }
-        }
+        attempt++;
+        console.log(`Retrying in ${retryDelay}ms... (attempt ${attempt + 1}/${retryAttempts})`);
+        
+        // Show retry message to user
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === messageId 
+              ? { ...msg, content: `Retrying... (${attempt}/${retryAttempts})`, status: 'retrying' } 
+              : msg
+          )
+        );
+
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        return attemptRequest();
+      } else {
+        throw error; // Final failure
       }
     }
+  };
 
-    // Mark streaming as complete
-    setMessages((prev) =>
-      prev.map((msg) =>
-        msg.id === messageId 
-          ? { ...msg, isStreaming: false } 
-          : msg
-      )
-    );
+  try {
+    await attemptRequest();
+    
+    // Only mark as complete if not aborted
+    if (!controller.signal.aborted) {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId 
+            ? { ...msg, isStreaming: false, status: 'sent' } 
+            : msg
+        )
+      );
+    }
 
   } catch (error: any) {
-    console.error('Real API Error:', error);
+    // Don't show error if user cancelled
+    if (error.name === 'AbortError' || controller.signal.aborted) {
+      console.log('Stream cancelled by user');
+      return;
+    }
+
+    console.error('Final streaming error:', error);
     
-    // Fallback to a simple error message
-    const errorMessage = error.name === 'AbortError' 
-      ? "Response cancelled" 
-      : "Sorry, I encountered an error. Please try again.";
+    // Enhanced error messages
+    const errorMessage = getErrorMessage(error);
     
     setMessages((prev) =>
       prev.map((msg) =>
@@ -102,12 +127,204 @@ export const streamResponse = async (
           ? { 
               ...msg, 
               content: errorMessage,
-              isStreaming: false 
+              isStreaming: false,
+              status: 'error'
             } 
           : msg
       )
     );
   } finally {
-    setIsLoading(false);
+    // Only set loading false if not aborted (handleStopStreaming will handle it)
+    if (!controller.signal.aborted) {
+      setIsLoading(false);
+    }
   }
 };
+
+// Smart conversation context preparation with token management
+function prepareConversationContext(
+  conversationHistory: ChatMessage[], 
+  currentPrompt: string
+): Array<{ role: 'user' | 'assistant'; content: string }> {
+  const maxContextTokens = 6000; // Conservative limit for Gemini
+  const estimatedTokensPerChar = 0.25; // Rough estimation
+  
+  // Start with current prompt
+  let totalTokens = currentPrompt.length * estimatedTokensPerChar;
+  const contextMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  
+  // Add messages from newest to oldest until we hit token limit
+  const reversedHistory = [...conversationHistory]
+    .filter(msg => !msg.isStreaming && msg.content.trim())
+    .reverse();
+  
+  for (const msg of reversedHistory) {
+    const messageTokens = msg.content.length * estimatedTokensPerChar;
+    
+    if (totalTokens + messageTokens > maxContextTokens) {
+      break;
+    }
+    
+    contextMessages.unshift({
+      role: msg.isUser ? 'user' : 'assistant',
+      content: msg.content
+    });
+    
+    totalTokens += messageTokens;
+  }
+  
+  // Add current prompt
+  contextMessages.push({
+    role: 'user',
+    content: currentPrompt
+  });
+  
+  console.log(`Context: ${contextMessages.length} messages, ~${Math.round(totalTokens)} tokens`);
+  return contextMessages;
+}
+
+// Enhanced stream processing with better parsing
+async function processStream(
+  body: ReadableStream<Uint8Array>,
+  messageId: string,
+  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
+  controller: AbortController
+): Promise<void> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let currentContent = "";
+  let buffer = "";
+
+  try {
+    while (true) {
+      if (controller.signal.aborted) {
+        console.log('Stream processing aborted');
+        break;
+      }
+      
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      
+      // Keep the last incomplete line in buffer
+      buffer = lines.pop() || "";
+      
+      for (const line of lines) {
+        if (controller.signal.aborted) break;
+        
+        const trimmedLine = line.trim();
+        if (!trimmedLine) continue;
+
+        // Enhanced parsing for different data stream formats
+        if (trimmedLine.startsWith('0:')) {
+          // Text content
+          const content = parseContentLine(trimmedLine.slice(2));
+          if (content) {
+            currentContent += content;
+            updateMessageContent(messageId, currentContent, setMessages);
+          }
+        } else if (trimmedLine.startsWith('e:')) {
+          // End of stream
+          console.log('Stream ended:', trimmedLine);
+          break;
+        } else if (trimmedLine.startsWith('d:')) {
+          // Stream data (metadata)
+          try {
+            const data = JSON.parse(trimmedLine.slice(2));
+            console.log('Stream metadata:', data);
+          } catch {
+            // Ignore parsing errors for metadata
+          }
+        }
+      }
+    }
+  } catch (error: any) {
+    if (error.name !== 'AbortError') {
+      console.error('Stream processing error:', error);
+      throw error;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+// Improved content parsing with better error handling
+function parseContentLine(line: string): string {
+  try {
+    // Handle quoted strings
+    if (line.startsWith('"') && line.endsWith('"')) {
+      return JSON.parse(line);
+    }
+    return line;
+  } catch {
+    return line; // Fallback to raw line
+  }
+}
+
+// Optimized message updates to prevent unnecessary re-renders
+let updateTimeout: NodeJS.Timeout | null = null;
+function updateMessageContent(
+  messageId: string,
+  content: string,
+  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>
+): void {
+  // Throttle updates to prevent too many re-renders
+  if (updateTimeout) {
+    clearTimeout(updateTimeout);
+  }
+  
+  updateTimeout = setTimeout(() => {
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === messageId 
+          ? { ...msg, content } 
+          : msg
+      )
+    );
+  }, 16); // ~60fps
+}
+
+// Error classification for retry logic
+function isRetryableError(error: any): boolean {
+  const retryableErrors = [
+    'network error',
+    'timeout',
+    'rate limit',
+    'temporary',
+    'service unavailable',
+    'failed to fetch',
+    'connection'
+  ];
+  
+  const errorMessage = error.message?.toLowerCase() || '';
+  return retryableErrors.some(keyword => errorMessage.includes(keyword));
+}
+
+// Enhanced error messages for better user experience
+function getErrorMessage(error: any): string {
+  if (error.name === 'AbortError') {
+    return "Response cancelled";
+  }
+  
+  const errorMsg = error.message?.toLowerCase() || '';
+  
+  if (errorMsg.includes('rate limit') || errorMsg.includes('quota')) {
+    return "⚠️ Rate limit reached. Please wait a moment and try again.";
+  }
+  
+  if (errorMsg.includes('timeout')) {
+    return "⏱️ Request timed out. Please try again.";
+  }
+  
+  if (errorMsg.includes('network') || errorMsg.includes('failed to fetch')) {
+    return "🌐 Network error. Please check your connection and try again.";
+  }
+  
+  if (errorMsg.includes('authentication') || errorMsg.includes('api key')) {
+    return "🔑 Authentication error. Please check your API configuration.";
+  }
+  
+  return "❌ Sorry, I encountered an error. Please try again.";
+}

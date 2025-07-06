@@ -33,11 +33,46 @@ export function useChatLogic() {
     }
   }, [shouldAutoScroll]);
 
+  // Stop/Pause streaming - Fixed error handling
+  const handleStopStreaming = () => {
+    if (streamingControllerRef.current) {
+      try {
+        streamingControllerRef.current.abort();
+      } catch {
+        // Ignore abort errors - they're expected
+        console.log("Stream aborted by user");
+      }
+      streamingControllerRef.current = null;
+    }
+
+    setIsLoading(false);
+
+    // Mark the last streaming message as stopped (not error)
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.isStreaming) {
+          return {
+            ...msg,
+            isStreaming: false,
+            status: "sent",
+            content: msg.content || "Response stopped by user.",
+          };
+        }
+        return msg;
+      })
+    );
+  };
+
   const handleSendMessage = async (content: string) => {
     if (!content.trim() || isLoading) return;
 
+    // Cancel any ongoing streaming
     if (streamingControllerRef.current) {
-      streamingControllerRef.current.abort();
+      try {
+        streamingControllerRef.current.abort();
+      } catch {
+        // Ignore abort errors
+      }
     }
 
     const userMessage: ChatMessage = {
@@ -45,6 +80,7 @@ export function useChatLogic() {
       content,
       isUser: true,
       timestamp: new Date().toLocaleTimeString(),
+      status: "sent",
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -59,6 +95,7 @@ export function useChatLogic() {
       isUser: false,
       timestamp: new Date().toLocaleTimeString(),
       isStreaming: true,
+      status: "sending",
     };
 
     setMessages((prev) => [...prev, aiMessage]);
@@ -66,20 +103,32 @@ export function useChatLogic() {
     const controller = new AbortController();
     streamingControllerRef.current = controller;
 
-    // Pass conversation history to the API
+    // Pass conversation history to the API with enhanced config
     const conversationHistory = [...messages, userMessage];
 
-    await streamResponse(
-      content,
-      aiMessageId,
-      setMessages,
-      setIsLoading,
-      controller,
-      conversationHistory
-    );
+    try {
+      await streamResponse(
+        content,
+        aiMessageId,
+        setMessages,
+        setIsLoading,
+        controller,
+        conversationHistory,
+        {
+          retryAttempts: 3,
+          retryDelay: 1000,
+          timeoutMs: 30000,
+        }
+      );
+    } catch (error: unknown) {
+      // Only log if it's not an abort error
+      if (error instanceof Error && error.name !== "AbortError") {
+        console.error("Send message error:", error);
+      }
+    }
   };
 
-  // Handle message editing
+  // Enhanced message editing with better error handling
   const handleEditMessage = (messageId: string) => {
     setMessages((prev) =>
       prev.map((msg) =>
@@ -90,7 +139,7 @@ export function useChatLogic() {
     );
   };
 
-  // Handle edit save
+  // Enhanced edit save with retry logic
   const handleSaveEdit = async (messageId: string, newContent: string) => {
     if (!newContent.trim()) return;
 
@@ -100,7 +149,11 @@ export function useChatLogic() {
 
     // Cancel any ongoing streaming
     if (streamingControllerRef.current) {
-      streamingControllerRef.current.abort();
+      try {
+        streamingControllerRef.current.abort();
+      } catch {
+        // Ignore abort errors
+      }
     }
 
     // Update the edited message and remove all subsequent messages
@@ -111,7 +164,8 @@ export function useChatLogic() {
             content: newContent,
             isEditing: false,
             originalContent: undefined,
-            timestamp: new Date().toLocaleTimeString(), // Update timestamp
+            timestamp: new Date().toLocaleTimeString(),
+            status: "sent" as const,
           }
         : msg
     );
@@ -128,6 +182,7 @@ export function useChatLogic() {
       isUser: false,
       timestamp: new Date().toLocaleTimeString(),
       isStreaming: true,
+      status: "sending",
     };
 
     setMessages((prev) => [...prev, aiMessage]);
@@ -135,15 +190,25 @@ export function useChatLogic() {
     const controller = new AbortController();
     streamingControllerRef.current = controller;
 
-    // Use updated messages for context (all messages up to and including the edited one)
-    await streamResponse(
-      newContent,
-      aiMessageId,
-      setMessages,
-      setIsLoading,
-      controller,
-      updatedMessages
-    );
+    try {
+      await streamResponse(
+        newContent,
+        aiMessageId,
+        setMessages,
+        setIsLoading,
+        controller,
+        updatedMessages,
+        {
+          retryAttempts: 3,
+          retryDelay: 1000,
+          timeoutMs: 30000,
+        }
+      );
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name !== "AbortError") {
+        console.error("Edit message error:", error);
+      }
+    }
   };
 
   // Handle edit cancel
@@ -162,6 +227,72 @@ export function useChatLogic() {
     );
   };
 
+  // Fixed: Retry failed message
+  const handleRetryMessage = async (messageId: string) => {
+    const messageIndex = messages.findIndex((msg) => msg.id === messageId);
+    const message = messages[messageIndex];
+
+    if (!message || message.isUser || messageIndex === -1) return;
+
+    // Find the previous user message
+    const userMessage = messages
+      .slice(0, messageIndex)
+      .reverse()
+      .find((msg) => msg.isUser);
+
+    if (!userMessage) return;
+
+    // Cancel any ongoing streaming
+    if (streamingControllerRef.current) {
+      try {
+        streamingControllerRef.current.abort();
+      } catch {
+        // Ignore abort errors
+      }
+    }
+
+    // Reset the AI message
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === messageId
+          ? {
+              ...msg,
+              content: "",
+              isStreaming: true,
+              status: "sending",
+              retryCount: (msg.retryCount || 0) + 1,
+            }
+          : msg
+      )
+    );
+
+    setIsLoading(true);
+    const controller = new AbortController();
+    streamingControllerRef.current = controller;
+
+    const conversationHistory = messages.slice(0, messageIndex);
+
+    try {
+      await streamResponse(
+        userMessage.content,
+        messageId,
+        setMessages,
+        setIsLoading,
+        controller,
+        conversationHistory,
+        {
+          retryAttempts: 2, // Fewer retries for manual retry
+          retryDelay: 500,
+          timeoutMs: 30000,
+        }
+      );
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name !== "AbortError") {
+        console.error("Retry message error:", error);
+      }
+    }
+  };
+
   return {
     messages,
     input,
@@ -176,5 +307,7 @@ export function useChatLogic() {
     handleEditMessage,
     handleSaveEdit,
     handleCancelEdit,
+    handleRetryMessage,
+    handleStopStreaming,
   };
 }

@@ -11,8 +11,5 @@ export { EditableMessage } from "./EditableMessage";
 // Hooks
 export { useChatLogic } from "./useChatLogic";
 
-// Utilities
-export { generateMockResponse, streamResponse } from "./mockApi";
-
 // Types
 export type { ChatMessage, EditableMessageProps } from "./types";

@@ -11,6 +11,7 @@ interface MessageListProps {
   onEditMessage: (messageId: string) => void;
   onSaveEdit: (messageId: string, newContent: string) => void;
   onCancelEdit: (messageId: string) => void;
+  onRetryMessage?: (messageId: string) => void;
 }
 
 export function MessageList({
@@ -22,6 +23,7 @@ export function MessageList({
   onEditMessage,
   onSaveEdit,
   onCancelEdit,
+  onRetryMessage,
 }: MessageListProps) {
   return (
     <div
@@ -41,25 +43,29 @@ export function MessageList({
             onEditMessage={onEditMessage}
             onSaveEdit={onSaveEdit}
             onCancelEdit={onCancelEdit}
+            onRetryMessage={onRetryMessage}
           />
         ))}
 
-        {/* Loading state */}
+        {/* Enhanced loading state */}
         {isLoading &&
           messages.length > 0 &&
           !messages[messages.length - 1]?.isStreaming && (
-            <div className="px-4 py-6 bg-[#212121]">
+            <div className="px-4 py-6">
               <div className="max-w-3xl mx-auto">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div
-                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                    style={{ animationDelay: "0.1s" }}
-                  ></div>
-                  <div
-                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                    style={{ animationDelay: "0.2s" }}
-                  ></div>
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-1">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: "0.1s" }}
+                    ></div>
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: "0.2s" }}
+                    ></div>
+                  </div>
+                  <span className="text-sm text-[#8e8ea0]">ChatGPT is thinking...</span>
                 </div>
               </div>
             </div>

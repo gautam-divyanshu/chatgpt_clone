@@ -8,6 +8,7 @@ interface MessageItemProps {
   onEditMessage: (messageId: string) => void;
   onSaveEdit: (messageId: string, newContent: string) => void;
   onCancelEdit: (messageId: string) => void;
+  onRetryMessage?: (messageId: string) => void;
 }
 
 export function MessageItem({
@@ -15,6 +16,7 @@ export function MessageItem({
   onEditMessage,
   onSaveEdit,
   onCancelEdit,
+  onRetryMessage,
 }: MessageItemProps) {
   const [copied, setCopied] = useState(false);
 
@@ -32,6 +34,10 @@ export function MessageItem({
   const formatContent = (content: string) => {
     return content.replace(/\\n/g, '\n');
   };
+
+  // Check if message has error status
+  const hasError = message.status === 'error';
+  const isRetrying = message.status === 'retrying';
 
   return (
     <div className={`px-4 py-6 ${message.isUser && "bg-transparent"}`}>
@@ -116,11 +122,39 @@ export function MessageItem({
             )}
           </div>
         ) : (
-          // AI message content with markdown rendering
+          // AI message content with enhanced error handling
           <div className="group">
             <div className="text-base leading-7">
-              <MarkdownRenderer content={formatContent(message.content)} />
-              {message.isStreaming && (
+              {hasError || isRetrying ? (
+                // Error state
+                <div className={`p-4 rounded-lg border ${
+                  hasError 
+                    ? 'bg-red-900/20 border-red-500/50 text-red-200' 
+                    : 'bg-yellow-900/20 border-yellow-500/50 text-yellow-200'
+                }`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    {hasError ? (
+                      <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5 text-yellow-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    )}
+                    <span className="font-medium">
+                      {hasError ? 'Error' : 'Retrying...'}
+                      {message.retryCount ? ` (Attempt ${message.retryCount})` : ''}
+                    </span>
+                  </div>
+                  <p>{message.content}</p>
+                </div>
+              ) : (
+                // Normal content with markdown
+                <MarkdownRenderer content={formatContent(message.content)} />
+              )}
+              
+              {message.isStreaming && !hasError && !isRetrying && (
                 <span
                   className="inline-block w-2 h-5 ml-1 animate-pulse"
                   style={{ backgroundColor: "#ececec" }}
@@ -128,7 +162,7 @@ export function MessageItem({
               )}
             </div>
             
-            {/* AI message actions - only show when not streaming */}
+            {/* AI message actions - show when not streaming and has content */}
             {!message.isStreaming && message.content && (
               <div className="flex gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
@@ -167,24 +201,28 @@ export function MessageItem({
                   )}
                 </button>
                 
-                <button
-                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                  title="Regenerate response"
-                >
-                  <svg
-                    className="w-4 h-4 text-[#8e8ea0]"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+                {/* Retry button - show for ALL AI messages */}
+                {onRetryMessage && (
+                  <button
+                    onClick={() => onRetryMessage(message.id)}
+                    className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                    title="Regenerate response"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
-                </button>
+                    <svg
+                      className="w-4 h-4 text-[#8e8ea0]"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                  </button>
+                )}
               </div>
             )}
           </div>

@@ -8,11 +8,15 @@ export function EditableMessage({
 }: EditableMessageProps) {
   const [editContent, setEditContent] = useState(content);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const cursorPositionRef = useRef<number>(0);
 
   // Auto-resize textarea based on content
   const adjustTextareaSize = useCallback(() => {
     if (textareaRef.current) {
       const textarea = textareaRef.current;
+
+      // Store current cursor position
+      cursorPositionRef.current = textarea.selectionStart;
 
       // Reset height to get accurate scroll height
       textarea.style.height = "auto";
@@ -42,20 +46,27 @@ export function EditableMessage({
       ); // +32 for padding
 
       textarea.style.width = `${calculatedWidth}px`;
+
+      // Restore cursor position after size adjustment
+      setTimeout(() => {
+        if (textarea) {
+          textarea.setSelectionRange(cursorPositionRef.current, cursorPositionRef.current);
+        }
+      }, 0);
     }
   }, [editContent]);
 
+  // Only run once when component mounts to focus and set initial cursor position
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.focus();
-      textareaRef.current.setSelectionRange(
-        editContent.length,
-        editContent.length
-      );
+      // Set cursor to end only on initial mount
+      textareaRef.current.setSelectionRange(content.length, content.length);
       adjustTextareaSize();
     }
-  }, [editContent.length, adjustTextareaSize]);
+  }, []); // Empty dependency array - only run once
 
+  // Run when content changes to adjust size, but preserve cursor position
   useEffect(() => {
     adjustTextareaSize();
   }, [editContent, adjustTextareaSize]);
@@ -70,6 +81,14 @@ export function EditableMessage({
     }
   };
 
+  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    // Store cursor position before updating content
+    if (textareaRef.current) {
+      cursorPositionRef.current = textareaRef.current.selectionStart;
+    }
+    setEditContent(e.target.value);
+  };
+
   const handleSave = () => {
     if (editContent.trim()) {
       onSave(editContent.trim());
@@ -81,10 +100,7 @@ export function EditableMessage({
       <textarea
         ref={textareaRef}
         value={editContent}
-        onChange={(e) => {
-          setEditContent(e.target.value);
-          adjustTextareaSize();
-        }}
+        onChange={handleContentChange}
         onKeyDown={handleKeyPress}
         className="bg-transparent text-[#ececec] resize-none outline-none text-base font-sans whitespace-pre-wrap"
         style={{

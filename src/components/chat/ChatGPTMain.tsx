@@ -2,17 +2,26 @@
 
 import { useEffect } from "react";
 import { ChatInput } from "./ChatInput";
-import { ChatHeader } from "./ChatHeader";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { MessageList } from "./MessageList";
 import { useChatLogic } from "./useChatLogic";
 
-export function ChatGPTMain() {
+interface ChatGPTMainProps {
+  conversationId?: string | null;
+  onConversationCreated?: (conversationId: string) => void;
+}
+
+export function ChatGPTMain({
+  conversationId,
+  onConversationCreated,
+}: ChatGPTMainProps) {
   const {
     messages,
     input,
     setInput,
     isLoading,
+    isLoadingConversation,
+    currentConversationId,
     messagesEndRef,
     chatContainerRef,
     handleScroll,
@@ -23,7 +32,28 @@ export function ChatGPTMain() {
     handleCancelEdit,
     handleRetryMessage,
     handleStopStreaming,
-  } = useChatLogic();
+    switchConversation,
+  } = useChatLogic(conversationId);
+
+  // Notify parent when a new conversation is created
+  useEffect(() => {
+    if (currentConversationId && onConversationCreated) {
+      onConversationCreated(currentConversationId);
+    }
+  }, [currentConversationId, onConversationCreated]);
+
+  // Switch conversation when conversationId prop changes
+  useEffect(() => {
+    if (conversationId !== currentConversationId) {
+      console.log(
+        "💬 ChatGPTMain: Switching from",
+        currentConversationId,
+        "to",
+        conversationId
+      );
+      switchConversation(conversationId || null);
+    }
+  }, [conversationId, currentConversationId, switchConversation]);
 
   useEffect(() => {
     scrollToBottom();
@@ -32,6 +62,73 @@ export function ChatGPTMain() {
   const handleExampleClick = (prompt: string) => {
     handleSendMessage(prompt);
   };
+
+  // Show loading state when switching conversations
+  if (isLoadingConversation) {
+    return (
+      <div className="flex-1 flex flex-col h-full chatgpt-main">
+        {/* Header - Desktop Only */}
+        <div className="hidden md:flex justify-between items-center border-b border-white/10 px-6 py-4">
+          <div className="flex items-center gap-2">
+            <span className="chatgpt-text text-lg font-medium">ChatGPT</span>
+            <svg
+              className="w-4 h-4 chatgpt-text-muted"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="p-2 rounded-lg chatgpt-hover">
+              <svg
+                className="w-5 h-5 chatgpt-text"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                />
+              </svg>
+            </button>
+            <button className="p-2 rounded-lg chatgpt-hover">
+              <svg
+                className="w-5 h-5 chatgpt-text"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Loading State */}
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white/60 mx-auto mb-3"></div>
+            <p className="chatgpt-text-muted">Loading conversation...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col h-full chatgpt-main">

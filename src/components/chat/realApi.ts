@@ -81,7 +81,7 @@ export const streamResponse = async (
 
       await processStream(response.body, messageId, setMessages, controller);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Handle abort differently - it's not a real error
       if (error.name === 'AbortError' || controller.signal.aborted) {
         console.log('Stream was cancelled by user');
@@ -169,7 +169,7 @@ function prepareConversationContext(
   const maxContextTokens = 6000; // Conservative limit for Gemini
   const estimatedTokensPerChar = 0.25; // Rough estimation
   
-  // Start with current prompt
+  // Start with current prompt tokens
   let totalTokens = currentPrompt.length * estimatedTokensPerChar;
   const contextMessages: Array<{ role: 'user' | 'assistant'; content: string; attachments?: UploadedFile[] }> = [];
   
@@ -200,11 +200,15 @@ function prepareConversationContext(
     totalTokens += messageTokens;
   }
   
-  // Add current prompt
-  contextMessages.push({
-    role: 'user',
-    content: currentPrompt
-  });
+  // Don't add current prompt again - it's already in the conversation history
+  // Only add if the conversation history is empty or doesn't contain the current prompt
+  const lastMessage = conversationHistory[conversationHistory.length - 1];
+  if (!lastMessage || lastMessage.content !== currentPrompt) {
+    contextMessages.push({
+      role: 'user',
+      content: currentPrompt
+    });
+  }
   
   console.log(`Context: ${contextMessages.length} messages, ~${Math.round(totalTokens)} tokens`);
   return contextMessages;

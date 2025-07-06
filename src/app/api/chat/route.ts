@@ -3,7 +3,7 @@ import { streamText } from "ai";
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
+    const { messages, attachments = [] } = await req.json();
 
     // Enhanced validation
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -18,6 +18,7 @@ export async function POST(req: Request) {
 
     // Log for debugging (remove in production)
     console.log("Received messages:", messages.length, "messages");
+    console.log("Received attachments:", attachments.length, "files");
 
     // Optional: Add test error trigger (remove in production)
     const lastMessage = messages[messages.length - 1]?.content?.toLowerCase() || '';
@@ -34,15 +35,18 @@ export async function POST(req: Request) {
       );
     }
 
+    // Process messages with multimodal content (images only)
+    const processedMessages = await processMessagesWithAttachments(messages, attachments);
+
     // Enhanced model configuration for better responses
     const result = await streamText({
       model: google("gemini-1.5-flash"),
-      messages,
+      messages: processedMessages,
       temperature: 0.7,
-      maxTokens: 4096, // Increased for longer responses
-      topP: 0.95, // Better response quality
-      frequencyPenalty: 0.3, // Reduce repetition
-      presencePenalty: 0.3, // Encourage diverse topics
+      maxTokens: 4096,
+      topP: 0.95,
+      frequencyPenalty: 0.3,
+      presencePenalty: 0.3,
     });
 
     return result.toDataStreamResponse({
@@ -92,4 +96,66 @@ export async function POST(req: Request) {
       }
     );
   }
+}
+
+// Process messages to include multimodal content (images only)
+async function processMessagesWithAttachments(messages: any[], attachments: any[]) {
+  const processedMessages = [];
+
+  for (const message of messages) {
+    if (message.role === 'user') {
+      // Find attachments for this message (last user message gets current attachments)
+      const isLastUserMessage = messages.indexOf(message) === messages.length - 1;
+      const messageAttachments = isLastUserMessage ? attachments : (message.attachments || []);
+
+      if (messageAttachments.length > 0) {
+        // Create multimodal content
+        const content = [];
+
+        // Add text content if exists
+        if (message.content && message.content.trim()) {
+          content.push({
+            type: 'text',
+            text: message.content
+          });
+        }
+
+        // Process attachments - IMAGES ONLY
+        for (const attachment of messageAttachments) {
+          if (attachment.isImage) {
+            // Add image directly to AI
+            content.push({
+              type: 'image',
+              image: attachment.url
+            });
+          } else {
+            // For documents, just inform the AI about the file without reading content
+            content.push({
+              type: 'text',
+              text: `\n[Document uploaded: ${attachment.originalName} (${attachment.type}) - I can see you've uploaded this document, but I can only read images. Please copy and paste any text content you'd like me to analyze.]`
+            });
+          }
+        }
+
+        processedMessages.push({
+          role: 'user',
+          content: content
+        });
+      } else {
+        // Regular text message
+        processedMessages.push({
+          role: 'user',
+          content: message.content
+        });
+      }
+    } else {
+      // Assistant message - keep as text
+      processedMessages.push({
+        role: 'assistant',
+        content: message.content
+      });
+    }
+  }
+
+  return processedMessages;
 }

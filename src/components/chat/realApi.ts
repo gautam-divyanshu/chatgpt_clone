@@ -1,4 +1,5 @@
 import { ChatMessage } from "./types";
+import { UploadedFile } from "./upload-types";
 
 interface StreamConfig {
   retryAttempts?: number;
@@ -13,7 +14,8 @@ export const streamResponse = async (
   setIsLoading: React.Dispatch<React.SetStateAction<boolean>>,
   controller: AbortController,
   conversationHistory: ChatMessage[] = [],
-  config: StreamConfig = {}
+  config: StreamConfig = {},
+  attachments: UploadedFile[] = []
 ): Promise<void> => {
   const {
     retryAttempts = 3,
@@ -28,30 +30,48 @@ export const streamResponse = async (
       // Prepare conversation context with smart truncation
       const apiMessages = prepareConversationContext(conversationHistory, prompt);
 
+      console.log("=== REAL API DEBUG ===");
       console.log(`Attempt ${attempt + 1}: Sending ${apiMessages.length} messages to API`);
+      console.log(`Attachments being sent: ${attachments.length} files`);
+      
+      if (attachments.length > 0) {
+        console.log("Attachment details:");
+        attachments.forEach((att, idx) => {
+          console.log(`${idx + 1}. ${att.originalName} (${att.type}) - ${att.isImage ? 'IMAGE' : 'DOCUMENT'}`);
+          console.log(`   URL: ${att.url}`);
+        });
+      }
 
       // Create timeout promise
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('Request timeout')), timeoutMs);
       });
 
-      // Create fetch promise
+      // Create fetch promise with attachments
+      const requestBody = {
+        messages: apiMessages,
+        attachments: attachments // Send attachments to API
+      };
+      
+      console.log("Request body being sent:", JSON.stringify(requestBody, null, 2));
+
       const fetchPromise = fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          messages: apiMessages
-        }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal
       });
 
       // Race between fetch and timeout
       const response = await Promise.race([fetchPromise, timeoutPromise]);
 
+      console.log(`API Response status: ${response.status}`);
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.error('API Error:', errorData);
         throw new Error(`HTTP ${response.status}: ${errorData.error || 'Unknown error'}`);
       }
 
@@ -145,13 +165,13 @@ export const streamResponse = async (
 function prepareConversationContext(
   conversationHistory: ChatMessage[], 
   currentPrompt: string
-): Array<{ role: 'user' | 'assistant'; content: string }> {
+): Array<{ role: 'user' | 'assistant'; content: string; attachments?: UploadedFile[] }> {
   const maxContextTokens = 6000; // Conservative limit for Gemini
   const estimatedTokensPerChar = 0.25; // Rough estimation
   
   // Start with current prompt
   let totalTokens = currentPrompt.length * estimatedTokensPerChar;
-  const contextMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  const contextMessages: Array<{ role: 'user' | 'assistant'; content: string; attachments?: UploadedFile[] }> = [];
   
   // Add messages from newest to oldest until we hit token limit
   const reversedHistory = [...conversationHistory]
@@ -165,11 +185,18 @@ function prepareConversationContext(
       break;
     }
     
-    contextMessages.unshift({
+    const contextMessage: { role: 'user' | 'assistant'; content: string; attachments?: UploadedFile[] } = {
       role: msg.isUser ? 'user' : 'assistant',
       content: msg.content
-    });
+    };
+
+    // Include attachments for user messages
+    if (msg.isUser && msg.attachments && msg.attachments.length > 0) {
+      contextMessage.attachments = msg.attachments;
+      console.log(`Including ${msg.attachments.length} attachments in context for message: ${msg.content.substring(0, 50)}...`);
+    }
     
+    contextMessages.unshift(contextMessage);
     totalTokens += messageTokens;
   }
   

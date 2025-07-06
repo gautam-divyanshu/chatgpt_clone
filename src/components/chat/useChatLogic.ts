@@ -67,6 +67,18 @@ export function useChatLogic() {
   const handleSendMessage = async (content: string, attachments?: UploadedFile[]) => {
     if ((!content.trim() && (!attachments || attachments.length === 0)) || isLoading) return;
 
+    // DEBUG: Log what we're sending
+    console.log("=== SENDING MESSAGE ===");
+    console.log("Content:", content);
+    console.log("Attachments:", attachments?.length || 0);
+    if (attachments && attachments.length > 0) {
+      attachments.forEach((att, idx) => {
+        console.log(`${idx + 1}. ${att.originalName} (${att.type})`);
+        console.log(`   Is Image: ${att.isImage}`);
+        console.log(`   URL: ${att.url}`);
+      });
+    }
+
     // Cancel any ongoing streaming
     if (streamingControllerRef.current) {
       try {
@@ -84,6 +96,8 @@ export function useChatLogic() {
       status: "sent",
       attachments: attachments || [],
     };
+
+    console.log("User message created:", userMessage);
 
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
@@ -109,6 +123,8 @@ export function useChatLogic() {
     const conversationHistory = [...messages, userMessage];
 
     try {
+      console.log("Calling streamResponse with attachments:", attachments?.length || 0);
+      
       await streamResponse(
         content,
         aiMessageId,
@@ -120,7 +136,8 @@ export function useChatLogic() {
           retryAttempts: 3,
           retryDelay: 1000,
           timeoutMs: 30000,
-        }
+        },
+        attachments || [] // Pass attachments to API
       );
     } catch (error: unknown) {
       // Only log if it's not an abort error
@@ -148,6 +165,8 @@ export function useChatLogic() {
     // Find the message being edited
     const messageIndex = messages.findIndex((msg) => msg.id === messageId);
     if (messageIndex === -1) return;
+
+    const editedMessage = messages[messageIndex];
 
     // Cancel any ongoing streaming
     if (streamingControllerRef.current) {
@@ -204,7 +223,8 @@ export function useChatLogic() {
           retryAttempts: 3,
           retryDelay: 1000,
           timeoutMs: 30000,
-        }
+        },
+        editedMessage.attachments || [] // Include original attachments when editing
       );
     } catch (error: unknown) {
       if (error instanceof Error && error.name !== "AbortError") {
@@ -286,7 +306,8 @@ export function useChatLogic() {
           retryAttempts: 2, // Fewer retries for manual retry
           retryDelay: 500,
           timeoutMs: 30000,
-        }
+        },
+        userMessage.attachments || [] // Include attachments when retrying
       );
     } catch (error: unknown) {
       if (error instanceof Error && error.name !== "AbortError") {

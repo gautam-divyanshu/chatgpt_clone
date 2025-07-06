@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import { ChatMessage } from "./types";
 import { EditableMessage } from "./EditableMessage";
+import { MarkdownRenderer } from "./MarkdownRenderer";
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -15,6 +16,23 @@ export function MessageItem({
   onSaveEdit,
   onCancelEdit,
 }: MessageItemProps) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy text: ", err);
+    }
+  };
+
+  // Format the content properly - replace \n with actual line breaks
+  const formatContent = (content: string) => {
+    return content.replace(/\\n/g, '\n');
+  };
+
   return (
     <div className={`px-4 py-6 ${message.isUser && "bg-transparent"}`}>
       <div className="max-w-3xl mx-auto">
@@ -59,9 +77,80 @@ export function MessageItem({
                     </svg>
                   </button>
                   <button
+                    onClick={() => handleCopy(message.content)}
                     className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                    title="Copy message"
+                    title={copied ? "Copied!" : "Copy message"}
                   >
+                    {copied ? (
+                      <svg
+                        className="w-4 h-4 text-green-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                    ) : (
+                      <svg
+                        className="w-4 h-4 text-[#8e8ea0]"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                        />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          // AI message content with markdown rendering
+          <div className="group">
+            <div className="text-base leading-7">
+              <MarkdownRenderer content={formatContent(message.content)} />
+              {message.isStreaming && (
+                <span
+                  className="inline-block w-2 h-5 ml-1 animate-pulse"
+                  style={{ backgroundColor: "#ececec" }}
+                ></span>
+              )}
+            </div>
+            
+            {/* AI message actions - only show when not streaming */}
+            {!message.isStreaming && message.content && (
+              <div className="flex gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={() => handleCopy(formatContent(message.content))}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                  title={copied ? "Copied!" : "Copy response"}
+                >
+                  {copied ? (
+                    <svg
+                      className="w-4 h-4 text-green-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  ) : (
                     <svg
                       className="w-4 h-4 text-[#8e8ea0]"
                       fill="none"
@@ -75,23 +164,29 @@ export function MessageItem({
                         d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
                       />
                     </svg>
-                  </button>
-                </div>
-              </>
+                  )}
+                </button>
+                
+                <button
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                  title="Regenerate response"
+                >
+                  <svg
+                    className="w-4 h-4 text-[#8e8ea0]"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                </button>
+              </div>
             )}
-          </div>
-        ) : (
-          // AI message content
-          <div className="text-[#ececec] text-base leading-7 space-y-4">
-            <div className="whitespace-pre-wrap">
-              {message.content}
-              {message.isStreaming && (
-                <span
-                  className="inline-block w-2 h-5 ml-1 animate-pulse"
-                  style={{ backgroundColor: "#ececec" }}
-                ></span>
-              )}
-            </div>
           </div>
         )}
       </div>

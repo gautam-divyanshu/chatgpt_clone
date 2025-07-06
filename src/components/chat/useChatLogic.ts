@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { ChatMessage } from "./types";
-import { streamResponse } from "./mockApi";
+import { streamResponse } from "./realApi";
 
 export function useChatLogic() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -66,12 +66,16 @@ export function useChatLogic() {
     const controller = new AbortController();
     streamingControllerRef.current = controller;
 
+    // Pass conversation history to the API
+    const conversationHistory = [...messages, userMessage];
+
     await streamResponse(
       content,
       aiMessageId,
       setMessages,
       setIsLoading,
-      controller
+      controller,
+      conversationHistory
     );
   };
 
@@ -131,12 +135,14 @@ export function useChatLogic() {
     const controller = new AbortController();
     streamingControllerRef.current = controller;
 
+    // Use updated messages for context (all messages up to and including the edited one)
     await streamResponse(
       newContent,
       aiMessageId,
       setMessages,
       setIsLoading,
-      controller
+      controller,
+      updatedMessages
     );
   };
 

@@ -102,7 +102,7 @@ export function EditableMessage({
       <div className="flex gap-2 mt-3 justify-end">
         <button
           onClick={onCancel}
-          className="px-3 py-1 text-sm text-[#8e8ea0] hover:text-[#ececec] transition-colors"
+          className="px-3 py-1 text-sm text-[#ececec] bg-[#212121] rounded-full hover:bg-[#2a2a2a] transition-colors"
         >
           Cancel
         </button>

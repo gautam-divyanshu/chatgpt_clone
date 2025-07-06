@@ -121,10 +121,10 @@ export function ChatInput({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Message ChatGPT..."
+              placeholder="Ask anything"
               disabled={isLoading}
               rows={1}
-              className="flex-1 bg-transparent chatgpt-text placeholder:chatgpt-text-muted outline-none text-base border-0 resize-none min-h-[24px] leading-6"
+              className="flex-1 bg-transparent chatgpt-text placeholder:text-white outline-none text-base border-0 resize-none min-h-[24px] leading-6"
               style={{
                 maxHeight: "300px",
                 scrollbarWidth: "thin",
@@ -148,7 +148,7 @@ export function ChatInput({
                 type="button"
                 className="flex items-center gap-2 px-3 py-2 rounded-full chatgpt-hover transition-colors chatgpt-text"
               >
-                <ToolsIcon className="w-4 h-4" />
+                <ToolsIcon className="w-5 h-5" />
                 <span className="text-sm">Tools</span>
               </button>
             </div>
@@ -189,7 +189,7 @@ export function ChatInput({
               {!input.trim() && attachments.length === 0 && !isLoading && (
                 <button
                   type="button"
-                  className="flex items-center justify-center w-8 h-8 rounded-full bg-[#565869] hover:bg-[#6b6d80] transition-colors text-white"
+                  className="flex items-center justify-center w-9 h-9 rounded-full bg-white/40 hover:bg-[#6b6d80] transition-colors text-black/70"
                 >
                   <UpArrowIcon className="w-5 h-5" />
                 </button>

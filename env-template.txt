@@ -1,0 +1,12 @@
+# Add this to your .env.local file
+
+# MongoDB Connection
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/chatgpt_clone?retryWrites=true&w=majority
+
+# Google AI (Gemini) API Key
+GOOGLE_GENERATIVE_AI_API_KEY=your_google_api_key_here
+
+# Cloudinary Configuration (you already have this)
+NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret

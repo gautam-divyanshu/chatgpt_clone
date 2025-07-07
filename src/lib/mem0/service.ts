@@ -1,6 +1,7 @@
 import { createMem0Client, ChatMemory } from "./config";
 
 export class Mem0Service {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private client: any;
   private initError: string | null = null;
 
@@ -27,6 +28,7 @@ export class Mem0Service {
   }
 
   async addMemory(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     message: string | any[],
     userId: string,
     conversationId?: string,
@@ -47,6 +49,7 @@ export class Mem0Service {
         messages = message;
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const options: any = { user_id: userId };
       if (conversationId) {
         options.conversation_id = conversationId;
@@ -85,6 +88,7 @@ export class Mem0Service {
     userId: string,
     conversationId: string,
     limit: number = 10
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<{ success: boolean; memories?: any[]; error?: string }> {
     if (!this.client) {
       return {
@@ -128,6 +132,7 @@ export class Mem0Service {
     query: string,
     userId: string,
     limit: number = 10
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<{ success: boolean; memories?: any[]; error?: string }> {
     if (!this.client) {
       return {
@@ -155,6 +160,7 @@ export class Mem0Service {
   async getUserMemories(
     userId: string,
     limit: number = 50
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<{ success: boolean; memories?: any[]; error?: string }> {
     if (!this.client) {
       return {
@@ -183,6 +189,7 @@ export class Mem0Service {
     conversationId: string,
     userId: string,
     limit: number = 20
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<{ success: boolean; memories?: any[]; error?: string }> {
     if (!this.client) {
       return {
@@ -308,6 +315,7 @@ export class Mem0Service {
         .map((memory) => memory.text || memory.memory || memory.content)
         .filter(Boolean);
     } catch (error) {
+      console.error('Error getting global user memories:', error);
       return [];
     }
   }

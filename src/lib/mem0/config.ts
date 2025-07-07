@@ -7,6 +7,7 @@ export const createMem0Client = () => {
   }
 
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const MemoryClient = require('mem0ai').default || require('mem0ai');
     const client = new MemoryClient({ apiKey });
     return client;
@@ -14,6 +15,7 @@ export const createMem0Client = () => {
     console.error('Failed to initialize Mem0 client:', error);
     
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const mem0Module = require('mem0ai');
       const MemoryClient = mem0Module.default || mem0Module.MemoryClient || mem0Module;
       

@@ -17,6 +17,21 @@ export function useChatLogic(conversationId?: string | null) {
     string | null
   >(conversationId || null);
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
+  
+  // Memory-related state - generate consistent user ID
+  const [userId] = useState(() => {
+    // Try to get user ID from localStorage or generate a new one
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('chatgpt-user-id');
+      if (stored) return stored;
+      
+      const newUserId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem('chatgpt-user-id', newUserId);
+      return newUserId;
+    }
+    return `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  });
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const streamingControllerRef = useRef<AbortController | null>(null);
@@ -374,7 +389,9 @@ export function useChatLogic(conversationId?: string | null) {
           retryDelay: 1000,
           timeoutMs: 30000,
         },
-        attachments || []
+        attachments || [],
+        userId, // Pass user ID for memory
+        convId  // Pass conversation ID for memory
       );
     } catch (error: unknown) {
       if (error instanceof Error && error.name !== "AbortError") {
@@ -457,7 +474,9 @@ export function useChatLogic(conversationId?: string | null) {
           retryDelay: 1000,
           timeoutMs: 30000,
         },
-        editedMessage.attachments || []
+        editedMessage.attachments || [],
+        userId, // Pass user ID for memory
+        currentConversationId || undefined // Pass conversation ID for memory
       );
     } catch (error: unknown) {
       if (error instanceof Error && error.name !== "AbortError") {
@@ -535,7 +554,9 @@ export function useChatLogic(conversationId?: string | null) {
           retryDelay: 500,
           timeoutMs: 30000,
         },
-        userMessage.attachments || []
+        userMessage.attachments || [],
+        userId, // Pass user ID for memory
+        currentConversationId || undefined // Pass conversation ID for memory
       );
     } catch (error: unknown) {
       if (error instanceof Error && error.name !== "AbortError") {

@@ -15,7 +15,9 @@ export const streamResponse = async (
   controller: AbortController,
   conversationHistory: ChatMessage[] = [],
   config: StreamConfig = {},
-  attachments: UploadedFile[] = []
+  attachments: UploadedFile[] = [],
+  userId?: string,
+  conversationId?: string
 ): Promise<void> => {
   const { retryAttempts = 3, retryDelay = 1000, timeoutMs = 30000 } = config;
 
@@ -52,10 +54,12 @@ export const streamResponse = async (
         setTimeout(() => reject(new Error("Request timeout")), timeoutMs);
       });
 
-      // Create fetch promise with attachments
+      // Create fetch promise with attachments and memory support
       const requestBody = {
         messages: apiMessages,
         attachments: attachments, // Send attachments to API
+        userId: userId || `user_${Date.now()}`, // Generate user ID if not provided
+        conversationId: conversationId || `conv_${Date.now()}`, // Generate conversation ID if not provided
       };
 
       console.log(

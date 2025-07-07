@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   ChatGPTIcon,
   NewChatIcon,
@@ -10,7 +10,7 @@ import {
   ToggleIcon,
   GPTsIcon,
 } from "@/components/ui/icons";
-import { ConversationManager, type Conversation } from "@/lib/conversationManager";
+import { useConversations } from "@/components/providers/ConversationProvider";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -21,47 +21,42 @@ interface SidebarProps {
   onNewChat: () => void;
 }
 
-export function Sidebar({ 
-  isOpen, 
-  onClose, 
-  onToggle, 
+export function Sidebar({
+  isOpen,
+  onClose,
+  onToggle,
   currentConversationId,
   onSelectConversation,
-  onNewChat 
+  onNewChat,
 }: SidebarProps) {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
+  const { conversations, refreshConversations } = useConversations();
 
-  // Load conversations on mount and when sidebar opens
-  useEffect(() => {
-    if (isOpen) {
-      loadConversations();
-    }
-  }, [isOpen]);
-
-  const loadConversations = async () => {
+  const loadConversations = useCallback(async () => {
     setLoading(true);
     try {
-      const allConversations = await ConversationManager.getAllConversations(50);
-      setConversations(allConversations);
-      console.log('📱 Sidebar: Loaded', allConversations.length, 'conversations');
+      await refreshConversations();
+      console.log("📱 Sidebar: Loaded conversations");
     } catch (error) {
-      console.error('Failed to load conversations:', error);
+      console.error("Failed to load conversations:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [refreshConversations]);
 
-  // Refresh conversations when a new conversation might be created
+  // Load conversations only once when sidebar first opens
   useEffect(() => {
-    if (isOpen && currentConversationId && conversations.length > 0) {
-      // Only refresh if we don't have this conversation in our list (new conversation created)
-      const hasConversation = conversations.some(conv => conv.id === currentConversationId);
-      if (!hasConversation) {
-        loadConversations();
-      }
+    if (isOpen && conversations.length === 0) {
+      loadConversations();
     }
-  }, [currentConversationId, isOpen, conversations.length]);
+  }, [isOpen, conversations.length, loadConversations]);
+
+  // Handle loading state based on conversations
+  useEffect(() => {
+    if (conversations.length > 0) {
+      setLoading(false);
+    }
+  }, [conversations]);
 
   return (
     <>
@@ -83,7 +78,11 @@ export function Sidebar({
             ? "w-64 translate-x-0 chatgpt-sidebar"
             : "w-16 md:translate-x-0 -translate-x-full md:block"
         }
-        ${!isOpen ? "md:bg-[#212121] md:hover:chatgpt-sidebar" : "chatgpt-sidebar"}
+        ${
+          !isOpen
+            ? "md:bg-[#212121] md:hover:chatgpt-sidebar"
+            : "chatgpt-sidebar"
+        }
       `}
         style={{
           backgroundColor: !isOpen ? "#212121" : undefined,
@@ -219,7 +218,7 @@ export function Sidebar({
             <div className="text-xs chatgpt-text-muted font-medium px-3 pt-6 pb-2">
               Recent Chats
             </div>
-            
+
             {loading ? (
               <div className="px-3 py-4 text-center">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white/60 mx-auto mb-2"></div>
@@ -227,7 +226,9 @@ export function Sidebar({
               </div>
             ) : conversations.length === 0 ? (
               <div className="px-3 py-4 text-center">
-                <p className="text-xs chatgpt-text-muted">No conversations yet</p>
+                <p className="text-xs chatgpt-text-muted">
+                  No conversations yet
+                </p>
               </div>
             ) : (
               <div className="space-y-1 px-1">
@@ -237,8 +238,8 @@ export function Sidebar({
                       onClick={() => onSelectConversation(conversation.id)}
                       className={`w-full flex items-center px-3 py-2.5 rounded-lg chatgpt-hover text-left transition-all ${
                         currentConversationId === conversation.id
-                          ? 'bg-white/10 border border-white/20'
-                          : 'border border-transparent'
+                          ? "bg-white/10 border border-white/20"
+                          : "border border-transparent"
                       }`}
                     >
                       <div className="flex-1 min-w-0">

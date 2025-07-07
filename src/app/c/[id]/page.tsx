@@ -5,48 +5,49 @@ import { ChatGPTMain } from "@/components/chat/ChatGPTMain";
 import { MobileHeader } from "@/components/layout/MobileHeader";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { useState, useCallback, useEffect } from "react";
 
-export default function Home() {
+export default function ConversationPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const params = useParams();
+  const conversationId = params.id as string;
+  
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(conversationId);
 
   // Redirect to sign-in if not authenticated
   useEffect(() => {
-    if (status === "loading") return; // Still loading
+    if (status === "loading") return;
     if (!session) {
       router.push("/auth/signin");
     }
   }, [session, status, router]);
+
+  // Update current conversation ID when route changes
+  useEffect(() => {
+    setCurrentConversationId(conversationId);
+  }, [conversationId]);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
 
   // Handle conversation selection from sidebar
-  const handleSelectConversation = useCallback((conversationId: string) => {
-    router.push(`/c/${conversationId}`); // Navigate to conversation route
+  const handleSelectConversation = useCallback((newConversationId: string) => {
+    router.push(`/c/${newConversationId}`);
   }, [router]);
 
   // Handle creating new conversation
   const handleNewChat = useCallback(() => {
-    setCurrentConversationId(null);
-    // Close sidebar on mobile after selection
-    if (window.innerWidth < 768) {
-      setSidebarOpen(false);
-    }
-  }, []);
+    router.push('/');
+  }, [router]);
 
   // Handle when a new conversation is created in ChatGPTMain
-  const handleConversationCreated = useCallback((conversationId: string) => {
-    setCurrentConversationId(conversationId);
-    // Use replace instead of push to avoid unmounting
-    // This updates the URL without causing a full page navigation
-    window.history.replaceState({}, '', `/c/${conversationId}`);
-  }, []);
+  const handleConversationCreated = useCallback((newConversationId: string) => {
+    router.push(`/c/${newConversationId}`);
+  }, [router]);
 
   // Show loading state while checking authentication
   if (status === "loading") {

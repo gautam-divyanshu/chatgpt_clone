@@ -9,8 +9,12 @@ import {
   type ChatMessage as DbChatMessage,
   type ChatAttachment,
 } from "@/lib/conversationManager";
+import { useConversations } from "@/components/providers/ConversationProvider";
+import { useStreaming } from "@/components/providers/StreamingProvider";
 
 export function useChatLogic(conversationId?: string | null) {
+  const { addConversation, updateConversation } = useConversations();
+  const { streamingState, setStreamingState, clearStreaming } = useStreaming();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -100,34 +104,55 @@ export function useChatLogic(conversationId?: string | null) {
 
       if (conversation) {
         setCurrentConversationId(conversation.id);
+        
+        // Add conversation to the context for real-time sidebar updates
+        addConversation({
+          id: conversation.id,
+          title: conversation.title,
+          createdAt: conversation.createdAt,
+          updatedAt: conversation.updatedAt,
+          messageCount: conversation.messageCount || 0,
+          lastMessageAt: conversation.lastMessageAt || conversation.createdAt,
+        });
+        
         return conversation.id;
       }
     } catch (error) {
       console.error("Failed to create new conversation:", error);
     }
     return null;
-  }, [transformToDbMessage]);
+  }, [transformToDbMessage, addConversation]);
 
   const loadConversation = useCallback(async (convId: string) => {
     if (!convId) return;
 
     setIsLoadingConversation(true);
+    
     try {
       const conversation = await ConversationManager.getConversation(convId);
-      if (conversation && conversation.messages) {
-        const transformedMessages = conversation.messages.map(transformDbMessage);
+      
+      if (conversation) {
+        // Load messages if they exist, otherwise set empty array
+        const transformedMessages = conversation.messages ? 
+          conversation.messages.map(transformDbMessage) : [];
         setMessages(transformedMessages);
         setCurrentConversationId(convId);
+      } else {
+        // Conversation not found, clear everything
+        setMessages([]);
+        setCurrentConversationId(null);
       }
     } catch (error) {
-      console.error("Failed to load conversation:", error);
+      console.error('Failed to load conversation:', error);
+      setMessages([]);
     } finally {
       setIsLoadingConversation(false);
     }
   }, [transformDbMessage]);
 
   const switchConversation = useCallback(async (convId: string | null) => {
-    if (convId === currentConversationId || isLoading) return;
+    if (convId === currentConversationId) return;
+    if (isLoading) return;
 
     if (convId) {
       await loadConversation(convId);
@@ -156,6 +181,24 @@ export function useChatLogic(conversationId?: string | null) {
       }
     }
   }, [isLoading, messages, currentConversationId, autoSaveMessages]);
+
+  // Load conversation on initial mount if conversationId is provided
+  useEffect(() => {
+    if (conversationId && !messages.length && !isLoadingConversation) {
+      loadConversation(conversationId);
+    }
+  }, [conversationId, loadConversation, messages.length, isLoadingConversation]);
+
+  // Handle continuing stream after route change
+  useEffect(() => {
+    if (streamingState.isStreaming && 
+        streamingState.conversationId === conversationId && 
+        streamingState.controller) {
+      // We're continuing a stream on the new route
+      setIsLoading(true);
+      streamingControllerRef.current = streamingState.controller;
+    }
+  }, [conversationId, streamingState]);
 
   const isScrolledToBottom = () => {
     if (!chatContainerRef.current) return true;

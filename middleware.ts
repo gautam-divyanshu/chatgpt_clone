@@ -6,11 +6,18 @@ export default auth((req) => {
   const { nextUrl } = req;
   const isLoggedIn = !!req.auth;
 
-  // Protect API routes (except auth routes)
+  // Allow access to share routes without authentication
+  const isShareRoute = nextUrl.pathname.startsWith('/share/');
+  if (isShareRoute) {
+    return NextResponse.next();
+  }
+
+  // Protect API routes (except auth routes and share routes)
   const isApiRoute = nextUrl.pathname.startsWith("/api");
   const isAuthApiRoute = nextUrl.pathname.startsWith("/api/auth");
+  const isShareApiRoute = nextUrl.pathname.startsWith("/api/share");
 
-  if (isApiRoute && !isAuthApiRoute && !isLoggedIn) {
+  if (isApiRoute && !isAuthApiRoute && !isShareApiRoute && !isLoggedIn) {
     return NextResponse.json(
       { error: "Unauthorized" },
       { status: 401 }

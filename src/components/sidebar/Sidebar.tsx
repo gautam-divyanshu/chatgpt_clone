@@ -11,6 +11,9 @@ import {
   GPTsIcon,
 } from "@/components/ui/icons";
 import { useConversations } from "@/components/providers/ConversationProvider";
+import { ConversationManager } from "@/lib/conversationManager";
+import { ConversationItem } from "./ConversationItem";
+import { SearchPopover } from "./SearchPopover";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -29,8 +32,9 @@ export function Sidebar({
   onSelectConversation,
   onNewChat,
 }: SidebarProps) {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const { conversations, refreshConversations } = useConversations();
+  const [showSearchPopover, setShowSearchPopover] = useState(false);
 
   const loadConversations = useCallback(async () => {
     setLoading(true);
@@ -44,19 +48,80 @@ export function Sidebar({
     }
   }, [refreshConversations]);
 
-  // Load conversations only once when sidebar first opens
+  const handleSearchClick = useCallback(() => {
+    setShowSearchPopover(true);
+  }, []);
+
+  const handleSearchSelect = useCallback(
+    (conversationId: string) => {
+      setShowSearchPopover(false);
+      onSelectConversation(conversationId);
+    },
+    [onSelectConversation]
+  );
+
+  // Handle conversation rename
+  const handleRename = useCallback(
+    async (conversationId: string, newTitle: string) => {
+      try {
+        const response = await fetch(
+          `/api/conversations/${conversationId}/rename`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ title: newTitle }),
+          }
+        );
+        const data = await response.json();
+        if (data.success) {
+          await refreshConversations();
+          console.log(
+            `Renamed conversation ${conversationId} to "${newTitle}"`
+          );
+        } else {
+          console.error("Failed to rename conversation:", data.error);
+        }
+      } catch (error) {
+        console.error("Failed to rename conversation:", error);
+      }
+    },
+    [refreshConversations]
+  );
+
+  // Handle conversation delete
+  const handleDelete = useCallback(
+    async (conversationId: string) => {
+      try {
+        const success = await ConversationManager.deleteConversation(
+          conversationId
+        );
+        if (success) {
+          await refreshConversations();
+          console.log(`Deleted conversation ${conversationId}`);
+          if (conversationId === currentConversationId) {
+            window.location.href = "/";
+          }
+        }
+      } catch (error) {
+        console.error("Failed to delete conversation:", error);
+      }
+    },
+    [refreshConversations, currentConversationId]
+  );
+
+  // Handle conversation share
+  const handleShare = useCallback((conversationId: string) => {
+    console.log(`Sharing conversation ${conversationId}`);
+  }, []);
+
+  // Load conversations when sidebar opens
   useEffect(() => {
     if (isOpen && conversations.length === 0) {
       loadConversations();
     }
   }, [isOpen, conversations.length, loadConversations]);
-
-  // Handle loading state based on conversations
-  useEffect(() => {
-    if (conversations.length > 0) {
-      setLoading(false);
-    }
-  }, [conversations]);
 
   return (
     <>
@@ -68,7 +133,7 @@ export function Sidebar({
         />
       )}
 
-      {/* Sidebar - Fixed mobile animation */}
+      {/* Sidebar */}
       <div
         className={`
         fixed md:relative inset-y-0 left-0 z-50 h-full flex flex-col group
@@ -85,7 +150,7 @@ export function Sidebar({
         }
       `}
         style={{
-          backgroundColor: !isOpen ? "#212121" : undefined,
+          backgroundColor: !isOpen ? "#212121" : "#171717",
           transition: "all 0.3s ease-in-out, background-color 0.3s ease-in-out",
         }}
       >
@@ -147,50 +212,43 @@ export function Sidebar({
 
           {/* Search chats */}
           <button
+            onClick={handleSearchClick}
             className={`
-              w-full flex items-center rounded-lg chatgpt-hover text-left transition-all duration-300
-              ${isOpen ? "gap-2 px-3 py-2" : "justify-center p-2"}
-            `}
+            w-full flex items-center rounded-lg chatgpt-hover text-left transition-all duration-300
+            ${isOpen ? "gap-2 px-3 py-2" : "justify-center p-2"}
+          `}
           >
             <SearchIcon />
             <span
               className={`
-                chatgpt-text text-sm whitespace-nowrap transition-all duration-300
-                ${
-                  isOpen
-                    ? "opacity-100 w-auto"
-                    : "opacity-0 w-0 overflow-hidden"
-                }
-              `}
+              chatgpt-text text-sm whitespace-nowrap transition-all duration-300
+              ${isOpen ? "opacity-100 w-auto" : "opacity-0 w-0 overflow-hidden"}
+            `}
             >
               Search chats
             </span>
           </button>
 
           {/* Library */}
-            <button
+          <button
             className={`
-              w-full flex items-center rounded-lg chatgpt-hover text-left transition-all duration-300
-              ${isOpen ? "gap-2 px-3 py-2" : "justify-center p-2"}
-            `}
+            w-full flex items-center rounded-lg chatgpt-hover text-left transition-all duration-300
+            ${isOpen ? "gap-2 px-3 py-2" : "justify-center p-2"}
+          `}
             disabled
             style={{ opacity: 0.5, cursor: "not-allowed" }}
             onClick={(e) => e.preventDefault()}
-            >
+          >
             <LibraryIcon />
             <span
               className={`
               chatgpt-text text-sm whitespace-nowrap transition-all duration-300
-              ${
-                isOpen
-                ? "opacity-100 w-auto"
-                : "opacity-0 w-0 overflow-hidden"
-              }
-              `}
+              ${isOpen ? "opacity-100 w-auto" : "opacity-0 w-0 overflow-hidden"}
+            `}
             >
               Library
             </span>
-            </button>
+          </button>
         </div>
 
         <div>
@@ -204,7 +262,7 @@ export function Sidebar({
             >
               <SoraIcon />
               <span className="chatgpt-text text-sm whitespace-nowrap">
-              Sora
+                Sora
               </span>
             </button>
           )}
@@ -219,7 +277,7 @@ export function Sidebar({
             >
               <GPTsIcon />
               <span className="chatgpt-text text-sm whitespace-nowrap">
-              GPTs
+                GPTs
               </span>
             </button>
           )}
@@ -229,9 +287,8 @@ export function Sidebar({
         {isOpen && (
           <div className="flex-1 overflow-y-auto">
             <div className="text-xs chatgpt-text-muted font-medium px-3 pt-6 pb-2">
-              Recent Chats
+              Chats
             </div>
-
             {loading ? (
               <div className="px-3 py-4 text-center">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white/60 mx-auto mb-2"></div>
@@ -244,24 +301,17 @@ export function Sidebar({
                 </p>
               </div>
             ) : (
-              <div className="space-y-1 px-1">
+              <div className=" px-1">
                 {conversations.map((conversation) => (
-                  <div key={conversation.id}>
-                    <button
-                      onClick={() => onSelectConversation(conversation.id)}
-                      className={`w-full flex items-center px-3 py-2.5 rounded-lg chatgpt-hover text-left transition-all ${
-                        currentConversationId === conversation.id
-                          ? "bg-white/10 border border-white/20"
-                          : "border border-transparent"
-                      }`}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="chatgpt-text text-sm truncate font-medium">
-                          {conversation.title}
-                        </div>
-                      </div>
-                    </button>
-                  </div>
+                  <ConversationItem
+                    key={conversation.id}
+                    conversation={conversation}
+                    isActive={currentConversationId === conversation.id}
+                    onSelect={onSelectConversation}
+                    onRename={handleRename}
+                    onDelete={handleDelete}
+                    onShare={handleShare}
+                  />
                 ))}
               </div>
             )}
@@ -287,6 +337,13 @@ export function Sidebar({
           </button>
         </div>
       </div>
+
+      {/* Search Popover */}
+      <SearchPopover
+        isOpen={showSearchPopover}
+        onClose={() => setShowSearchPopover(false)}
+        onSelectConversation={handleSearchSelect}
+      />
     </>
   );
 }

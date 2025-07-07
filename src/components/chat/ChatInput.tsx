@@ -144,13 +144,16 @@ export function ChatInput({
               />
 
               {/* Tools Button */}
-              <button
+                <button
                 type="button"
-                className="flex items-center gap-2 px-3 py-2 rounded-full chatgpt-hover transition-colors chatgpt-text"
-              >
+                className="flex items-center gap-2 px-3 py-2 rounded-full chatgpt-hover transition-colors chatgpt-text opacity-50 cursor-not-allowed"
+                disabled
+                tabIndex={-1}
+                aria-disabled="true"
+                >
                 <ToolsIcon className="w-5 h-5" />
                 <span className="text-sm">Tools</span>
-              </button>
+                </button>
             </div>
 
             {/* Right side buttons */}

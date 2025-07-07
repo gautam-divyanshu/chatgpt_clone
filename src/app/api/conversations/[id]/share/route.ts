@@ -2,9 +2,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/database';
 import Conversation from '@/models/Conversation';
+import SharedConversation from '@/models/SharedConversation';
 import { auth } from '@/lib/auth/auth';
 
-// POST /api/conversations/[id]/share - Create a shareable link for conversation
+// POST /api/conversations/[id]/share - Create a shareable link
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -34,39 +35,50 @@ export async function POST(
       );
     }
 
-    // Generate a unique share ID
-    const shareId = `share_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    // Update conversation with share information
-    conversation.shareId = shareId;
-    conversation.isShared = true;
-    conversation.sharedAt = new Date();
-    await conversation.save();
+    // Check if already shared
+    let sharedConversation = await SharedConversation.findOne({
+      originalConversationId: conversation.id
+    });
 
-    const shareUrl = `${process.env.NEXTAUTH_URL}/share/${shareId}`;
-    
+    if (!sharedConversation) {
+      // Create new shared conversation
+      const shareId = `shared_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      sharedConversation = new SharedConversation({
+        id: shareId,
+        originalConversationId: conversation.id,
+        title: conversation.title,
+        messages: conversation.messages,
+        ownerId: session.user.id,
+        createdAt: new Date(),
+        isPublic: true
+      });
+
+      await sharedConversation.save();
+    }
+
+    const shareUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/share/${sharedConversation.id}`;
+
     return NextResponse.json({
       success: true,
-      shareId,
       shareUrl,
-      message: 'Conversation shared successfully'
+      shareId: sharedConversation.id
     });
   } catch (error) {
-    console.error('Error sharing conversation:', error);
+    console.error('Error creating share link:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to share conversation' },
+      { success: false, error: 'Failed to create share link' },
       { status: 500 }
     );
   }
 }
 
-// DELETE /api/conversations/[id]/share - Remove sharing for conversation
+// DELETE /api/conversations/[id]/share - Remove sharing
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Check authentication
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -80,7 +92,7 @@ export async function DELETE(
     const resolvedParams = await params;
     const conversation = await Conversation.findOne({ 
       id: resolvedParams.id,
-      userId: session.user.id // Ensure user owns the conversation
+      userId: session.user.id
     });
     
     if (!conversation) {
@@ -90,20 +102,19 @@ export async function DELETE(
       );
     }
 
-    // Remove sharing
-    conversation.shareId = undefined;
-    conversation.isShared = false;
-    conversation.sharedAt = undefined;
-    await conversation.save();
-    
+    // Remove shared conversation
+    await SharedConversation.deleteOne({
+      originalConversationId: conversation.id
+    });
+
     return NextResponse.json({
       success: true,
-      message: 'Conversation sharing removed successfully'
+      message: 'Share link removed'
     });
   } catch (error) {
-    console.error('Error removing conversation sharing:', error);
+    console.error('Error removing share link:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to remove sharing' },
+      { success: false, error: 'Failed to remove share link' },
       { status: 500 }
     );
   }

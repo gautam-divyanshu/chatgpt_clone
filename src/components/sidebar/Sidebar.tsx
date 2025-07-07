@@ -168,45 +168,58 @@ export function Sidebar({
           </button>
 
           {/* Library */}
-          <button
+            <button
             className={`
               w-full flex items-center rounded-lg chatgpt-hover text-left transition-all duration-300
               ${isOpen ? "gap-2 px-3 py-2" : "justify-center p-2"}
             `}
-          >
+            disabled
+            style={{ opacity: 0.5, cursor: "not-allowed" }}
+            onClick={(e) => e.preventDefault()}
+            >
             <LibraryIcon />
             <span
               className={`
-                chatgpt-text text-sm whitespace-nowrap transition-all duration-300
-                ${
-                  isOpen
-                    ? "opacity-100 w-auto"
-                    : "opacity-0 w-0 overflow-hidden"
-                }
+              chatgpt-text text-sm whitespace-nowrap transition-all duration-300
+              ${
+                isOpen
+                ? "opacity-100 w-auto"
+                : "opacity-0 w-0 overflow-hidden"
+              }
               `}
             >
               Library
             </span>
-          </button>
+            </button>
         </div>
 
         <div>
           {/* Sora - Only show when expanded */}
           {isOpen && (
-            <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg chatgpt-hover text-left transition-all duration-300">
+            <button
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg chatgpt-hover text-left transition-all duration-300"
+              disabled
+              style={{ opacity: 0.5, cursor: "not-allowed" }}
+              onClick={(e) => e.preventDefault()}
+            >
               <SoraIcon />
               <span className="chatgpt-text text-sm whitespace-nowrap">
-                Sora
+              Sora
               </span>
             </button>
           )}
 
           {/* GPTs - Only show when expanded */}
           {isOpen && (
-            <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg chatgpt-hover text-left transition-all duration-300">
+            <button
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg chatgpt-hover text-left transition-all duration-300"
+              disabled
+              style={{ opacity: 0.5, cursor: "not-allowed" }}
+              onClick={(e) => e.preventDefault()}
+            >
               <GPTsIcon />
               <span className="chatgpt-text text-sm whitespace-nowrap">
-                GPTs
+              GPTs
               </span>
             </button>
           )}

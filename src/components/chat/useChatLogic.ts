@@ -10,11 +10,9 @@ import {
   type ChatAttachment,
 } from "@/lib/conversationManager";
 import { useConversations } from "@/components/providers/ConversationProvider";
-import { useStreaming } from "@/components/providers/StreamingProvider";
 
 export function useChatLogic(conversationId?: string | null) {
-  const { addConversation, updateConversation } = useConversations();
-  const { streamingState, setStreamingState, clearStreaming } = useStreaming();
+  const { addConversation } = useConversations();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -188,17 +186,6 @@ export function useChatLogic(conversationId?: string | null) {
       loadConversation(conversationId);
     }
   }, [conversationId, loadConversation, messages.length, isLoadingConversation]);
-
-  // Handle continuing stream after route change
-  useEffect(() => {
-    if (streamingState.isStreaming && 
-        streamingState.conversationId === conversationId && 
-        streamingState.controller) {
-      // We're continuing a stream on the new route
-      setIsLoading(true);
-      streamingControllerRef.current = streamingState.controller;
-    }
-  }, [conversationId, streamingState]);
 
   const isScrolledToBottom = () => {
     if (!chatContainerRef.current) return true;

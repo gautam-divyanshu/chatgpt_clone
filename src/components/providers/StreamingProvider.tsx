@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useRef, useState } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 
 interface StreamingState {
   conversationId: string | null;

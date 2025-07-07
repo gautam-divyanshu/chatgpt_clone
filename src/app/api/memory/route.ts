@@ -6,7 +6,6 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
-    const conversationId = searchParams.get('conversationId');
     const query = searchParams.get('query');
     const limit = parseInt(searchParams.get('limit') || '20');
 
@@ -27,44 +26,11 @@ export async function GET(request: NextRequest) {
     let result;
 
     if (query) {
-      // Search memories and filter by conversation if specified
-      const searchResult = await mem0Service.getUserMemories(userId, limit * 2);
-      if (searchResult.success && searchResult.memories) {
-        let filteredMemories = searchResult.memories;
-        
-        // Filter by conversation if specified
-        if (conversationId) {
-          filteredMemories = filteredMemories.filter(memory => {
-            const memoryConvId = memory.metadata?.conversation_id;
-            return memoryConvId === conversationId;
-          });
-        }
-        
-        // Then filter by search query
-        const searchedMemories = filteredMemories.filter(memory => {
-          const content = (memory.text || memory.memory || memory.content || '').toLowerCase();
-          return content.includes(query.toLowerCase());
-        }).slice(0, limit);
-        
-        result = { success: true, memories: searchedMemories };
-      } else {
-        result = searchResult;
-      }
-    } else if (conversationId) {
-      // Get conversation memories using client-side filtering
-      const allMemoriesResult = await mem0Service.getUserMemories(userId, limit * 2);
-      if (allMemoriesResult.success && allMemoriesResult.memories) {
-        const conversationMemories = allMemoriesResult.memories.filter(memory => {
-          const memoryConvId = memory.metadata?.conversation_id;
-          return memoryConvId === conversationId;
-        }).slice(0, limit);
-        
-        result = { success: true, memories: conversationMemories };
-      } else {
-        result = allMemoriesResult;
-      }
+      // Search memories globally (no conversation filtering)
+      const searchResult = await mem0Service.searchMemories(query, userId, limit);
+      result = searchResult;
     } else {
-      // Get all user memories
+      // Get all user memories globally
       result = await mem0Service.getUserMemories(userId, limit);
     }
 

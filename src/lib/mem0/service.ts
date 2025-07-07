@@ -49,22 +49,21 @@ export class Mem0Service {
         messages = message;
       }
 
+      // Use only userId for global memory (no conversation_id)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const options: any = { user_id: userId };
-      if (conversationId) {
-        options.conversation_id = conversationId;
-      }
+      
       if (metadata) {
         options.metadata = {
           ...metadata,
           timestamp: new Date().toISOString(),
-          conversation_id: conversationId, // Explicitly store conversation ID in metadata
+          // Store conversation_id in metadata for reference but don't use for filtering
+          source_conversation_id: conversationId,
         };
       } else if (conversationId) {
-        // Ensure conversation_id is always in metadata
         options.metadata = {
           timestamp: new Date().toISOString(),
-          conversation_id: conversationId,
+          source_conversation_id: conversationId,
         };
       }
 
@@ -248,27 +247,28 @@ export class Mem0Service {
     }
 
     try {
-      // Get all user memories and filter client-side for conversation isolation
-      // This is more reliable than depending on Mem0's conversation_id filtering
-      const allMemoriesResult = await this.getUserMemories(userId, 50);
+      // Use global memory search across all conversations
+      const searchResult = await this.searchMemories(currentMessage, userId, limit);
 
-      if (!allMemoriesResult.success || !allMemoriesResult.memories) {
+      if (!searchResult.success || !searchResult.memories) {
+        // Fallback to getting all user memories if search fails
+        const allMemoriesResult = await this.getUserMemories(userId, limit);
+        if (allMemoriesResult.success && allMemoriesResult.memories) {
+          return allMemoriesResult.memories
+            .slice(0, limit)
+            .map((memory) => memory.text || memory.memory || memory.content)
+            .filter(Boolean);
+        }
         return [];
       }
 
-      // Filter memories that belong to this specific conversation
-      const conversationMemories = allMemoriesResult.memories.filter(memory => {
-        const memoryConvId = memory.metadata?.conversation_id;
-        return memoryConvId === conversationId;
-      });
-
-      // Extract and return memory content
-      const relevantMemories = conversationMemories
+      // Extract and return memory content from search results
+      const relevantMemories = searchResult.memories
         .slice(0, limit)
         .map((memory) => memory.text || memory.memory || memory.content)
         .filter(Boolean);
 
-      console.log(`Retrieved ${relevantMemories.length} memories from conversation ${conversationId} (filtered from ${allMemoriesResult.memories.length} total)`);
+      console.log(`Retrieved ${relevantMemories.length} global memories for user ${userId}`);
       return relevantMemories;
     } catch (error) {
       console.error('Error getting relevant memories:', error);

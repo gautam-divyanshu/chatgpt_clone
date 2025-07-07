@@ -1,30 +1,29 @@
 // src/app/api/conversations/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/database";
-import Conversation, { IConversation, IMessage } from "@/models/Conversation";
-import { Model } from "mongoose";
+import Conversation from "@/models/Conversation";
+import { auth } from "@/lib/auth/auth";
 
-interface ConversationMethods {
-  addMessage(message: Partial<IMessage>): IMessage;
-}
-
-interface ConversationModel extends Model<IConversation> {
-  findWithPagination(limit: number, offset: number): Promise<IConversation[]>;
-  createNew(): IConversation & ConversationMethods;
-}
-
-// GET /api/conversations - Get all conversations
+// GET /api/conversations - Get all conversations for authenticated user
 export async function GET(request: NextRequest) {
   try {
+    // Check authentication
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
 
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get("limit") || "50");
     const offset = parseInt(searchParams.get("offset") || "0");
 
-    const conversations = await (
-      Conversation as ConversationModel
-    ).findWithPagination(limit, offset);
+    const conversations = await Conversation.findWithPagination(
+      session.user.id,
+      limit,
+      offset
+    );
 
     return NextResponse.json({
       success: true,
@@ -40,15 +39,21 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/conversations - Create new conversation
+// POST /api/conversations - Create new conversation for authenticated user
 export async function POST(request: NextRequest) {
   try {
+    // Check authentication
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
 
     const body = await request.json();
     const { title, firstMessage } = body;
 
-    const conversation = (Conversation as ConversationModel).createNew();
+    const conversation = Conversation.createNew(session.user.id);
 
     if (title) {
       conversation.title = title;
@@ -72,6 +77,7 @@ export async function POST(request: NextRequest) {
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
         messageCount: conversation.messageCount,
+        userId: conversation.userId,
       },
     });
   } catch (error) {

@@ -1,5 +1,5 @@
 // src/models/Conversation.ts
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Document, Model } from 'mongoose';
 
 // Attachment interface for files stored in Cloudinary
 export interface IAttachment {
@@ -26,10 +26,19 @@ export interface IConversation extends Document {
   id: string;
   title: string;
   messages: IMessage[];
+  userId: string; 
   createdAt: Date;
   updatedAt: Date;
   messageCount: number;
   lastMessageAt: Date;
+  updateTitleFromFirstMessage(): void;
+  addMessage(message: Partial<IMessage>): IMessage;
+}
+
+// Interface for static methods
+export interface IConversationModel extends Model<IConversation> {
+  createNew(userId: string): IConversation;
+  findWithPagination(userId: string, limit?: number, offset?: number): Promise<Partial<IConversation>[]>;
 }
 
 // Attachment Schema
@@ -57,6 +66,7 @@ const ConversationSchema = new Schema<IConversation>({
   id: { type: String, required: true, unique: true },
   title: { type: String, default: 'New Chat' },
   messages: [MessageSchema],
+  userId: { type: String, required: true },
   messageCount: { type: Number, default: 0 },
   lastMessageAt: { type: Date, default: Date.now }
 }, {
@@ -65,6 +75,9 @@ const ConversationSchema = new Schema<IConversation>({
 });
 
 // Indexes for better performance
+ConversationSchema.index({ userId: 1, createdAt: -1 });
+ConversationSchema.index({ userId: 1, updatedAt: -1 });
+ConversationSchema.index({ userId: 1, lastMessageAt: -1 });
 ConversationSchema.index({ createdAt: -1 });
 ConversationSchema.index({ updatedAt: -1 });
 ConversationSchema.index({ lastMessageAt: -1 });
@@ -116,23 +129,25 @@ ConversationSchema.methods.addMessage = function(message: Partial<IMessage>) {
 };
 
 // Static method to create a new conversation
-ConversationSchema.statics.createNew = function() {
+ConversationSchema.statics.createNew = function(userId: string) {
   return new this({
     id: `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     title: 'New Chat',
-    messages: []
+    messages: [],
+    userId: userId
   });
 };
 
 // Static method to find conversations with pagination
-ConversationSchema.statics.findWithPagination = function(limit = 50, offset = 0) {
-  return this.find()
+ConversationSchema.statics.findWithPagination = function(userId: string, limit = 50, offset = 0) {
+  return this.find({ userId })
     .sort({ updatedAt: -1 })
     .skip(offset)
     .limit(limit)
-    .select('id title createdAt updatedAt messageCount lastMessageAt')
+    .select('id title createdAt updatedAt messageCount lastMessageAt userId')
     .lean();
 };
 
 // Export the model
-export default mongoose.models.Conversation || mongoose.model<IConversation>('Conversation', ConversationSchema);
+const Conversation = (mongoose.models.Conversation as IConversationModel) || mongoose.model<IConversation, IConversationModel>('Conversation', ConversationSchema);
+export default Conversation;

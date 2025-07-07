@@ -5,6 +5,7 @@ import { ChatInput } from "./ChatInput";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { MessageList } from "./MessageList";
 import { useChatLogic } from "./useChatLogic";
+import { UserAvatar } from "@/components/auth/UserAvatar";
 
 interface ChatGPTMainProps {
   conversationId?: string | null;
@@ -101,21 +102,7 @@ export function ChatGPTMain({
                 />
               </svg>
             </button>
-            <button className="p-2 rounded-lg chatgpt-hover">
-              <svg
-                className="w-5 h-5 chatgpt-text"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
-                />
-              </svg>
-            </button>
+            <UserAvatar />
           </div>
         </div>
 
@@ -166,21 +153,7 @@ export function ChatGPTMain({
               />
             </svg>
           </button>
-          <button className="p-2 rounded-lg chatgpt-hover">
-            <svg
-              className="w-5 h-5 chatgpt-text"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
-              />
-            </svg>
-          </button>
+          <UserAvatar />
         </div>
       </div>
 

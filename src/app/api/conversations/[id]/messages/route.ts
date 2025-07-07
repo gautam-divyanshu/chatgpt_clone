@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/database';
 import Conversation from '@/models/Conversation';
+import { auth } from '@/lib/auth/auth';
 
 // POST /api/conversations/[id]/messages - Add a message to conversation
 export async function POST(
@@ -9,6 +10,15 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Check authentication
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     await connectDB();
     
     const body = await request.json();
@@ -22,7 +32,10 @@ export async function POST(
     }
     
     const resolvedParams = await params;
-    const conversation = await Conversation.findOne({ id: resolvedParams.id });
+    const conversation = await Conversation.findOne({ 
+      id: resolvedParams.id,
+      userId: session.user.id // Ensure user can only add messages to their own conversations
+    });
     
     if (!conversation) {
       return NextResponse.json(
@@ -46,7 +59,8 @@ export async function POST(
         id: conversation.id,
         title: conversation.title,
         messageCount: conversation.messageCount,
-        updatedAt: conversation.updatedAt
+        updatedAt: conversation.updatedAt,
+        userId: conversation.userId
       }
     });
   } catch (error) {

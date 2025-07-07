@@ -6,7 +6,7 @@ import Conversation from '@/models/Conversation';
 // POST /api/conversations/[id]/messages - Add a message to conversation
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
@@ -21,7 +21,8 @@ export async function POST(
       );
     }
     
-    const conversation = await Conversation.findOne({ id: params.id });
+    const resolvedParams = await params;
+    const conversation = await Conversation.findOne({ id: resolvedParams.id });
     
     if (!conversation) {
       return NextResponse.json(

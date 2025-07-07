@@ -6,12 +6,13 @@ import Conversation from '@/models/Conversation';
 // GET /api/conversations/[id] - Get specific conversation with messages
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
     
-    const conversation = await Conversation.findOne({ id: params.id });
+    const resolvedParams = await params;
+    const conversation = await Conversation.findOne({ id: resolvedParams.id });
     
     if (!conversation) {
       return NextResponse.json(
@@ -43,7 +44,7 @@ export async function GET(
 // PUT /api/conversations/[id] - Update conversation (add messages)
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
@@ -51,7 +52,8 @@ export async function PUT(
     const body = await request.json();
     const { messages, title } = body;
     
-    const conversation = await Conversation.findOne({ id: params.id });
+    const resolvedParams = await params;
+    const conversation = await Conversation.findOne({ id: resolvedParams.id });
     
     if (!conversation) {
       return NextResponse.json(
@@ -95,12 +97,13 @@ export async function PUT(
 // DELETE /api/conversations/[id] - Delete conversation
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
     
-    const conversation = await Conversation.findOneAndDelete({ id: params.id });
+    const resolvedParams = await params;
+    const conversation = await Conversation.findOneAndDelete({ id: resolvedParams.id });
     
     if (!conversation) {
       return NextResponse.json(

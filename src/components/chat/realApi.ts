@@ -1,5 +1,7 @@
 import { ChatMessage } from "./types";
 import { UploadedFile } from "./upload-types";
+import { CHAT_CONFIG, API_CONFIG } from "@/config";
+import { generateUserId, generateConversationId } from "@/lib/utils";
 
 interface StreamConfig {
   retryAttempts?: number;
@@ -19,71 +21,42 @@ export const streamResponse = async (
   userId?: string,
   conversationId?: string
 ): Promise<void> => {
-  const { retryAttempts = 3, retryDelay = 1000, timeoutMs = 30000 } = config;
-
+  const {
+    retryAttempts = CHAT_CONFIG.DEFAULT_RETRY_ATTEMPTS,
+    retryDelay = CHAT_CONFIG.DEFAULT_RETRY_DELAY,
+    timeoutMs = CHAT_CONFIG.DEFAULT_TIMEOUT,
+  } = config;
   let attempt = 0;
 
   const attemptRequest = async (): Promise<void> => {
     try {
-      // Prepare conversation context with smart truncation
       const apiMessages = prepareConversationContext(
         conversationHistory,
         prompt
       );
 
-      console.log("=== REAL API DEBUG ===");
-      console.log(
-        `Attempt ${attempt + 1}: Sending ${apiMessages.length} messages to API`
-      );
-      console.log(`Attachments being sent: ${attachments.length} files`);
-
-      if (attachments.length > 0) {
-        console.log("Attachment details:");
-        attachments.forEach((att, idx) => {
-          console.log(
-            `${idx + 1}. ${att.originalName} (${att.type}) - ${
-              att.isImage ? "IMAGE" : "DOCUMENT"
-            }`
-          );
-          console.log(`   URL: ${att.url}`);
-        });
-      }
-
-      // Create timeout promise
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error("Request timeout")), timeoutMs);
       });
 
-      // Create fetch promise with attachments and memory support
       const requestBody = {
         messages: apiMessages,
-        attachments: attachments, // Send attachments to API
-        userId: userId || `user_${Date.now()}`, // Generate user ID if not provided
-        conversationId: conversationId || `conv_${Date.now()}`, // Generate conversation ID if not provided
+        attachments: attachments,
+        userId: userId || generateUserId(),
+        conversationId: conversationId || generateConversationId(),
       };
 
-      console.log(
-        "Request body being sent:",
-        JSON.stringify(requestBody, null, 2)
-      );
-
-      const fetchPromise = fetch("/api/chat", {
+      const fetchPromise = fetch(API_CONFIG.CHAT_ENDPOINT, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
 
-      // Race between fetch and timeout
       const response = await Promise.race([fetchPromise, timeoutPromise]);
-
-      console.log(`API Response status: ${response.status}`);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error("API Error:", errorData);
         throw new Error(
           `HTTP ${response.status}: ${errorData.error || "Unknown error"}`
         );
@@ -95,28 +68,17 @@ export const streamResponse = async (
 
       await processStream(response.body, messageId, setMessages, controller);
     } catch (error: unknown) {
-      // Handle abort differently - it's not a real error
-      if (error.name === "AbortError" || controller.signal.aborted) {
-        console.log("Stream was cancelled by user");
-        return; // Don't retry on user cancellation
+      if ((error as Error).name === "AbortError" || controller.signal.aborted) {
+        return;
       }
 
-      console.error(`Attempt ${attempt + 1} failed:`, error);
-
-      // Check if we should retry
       if (
         attempt < retryAttempts - 1 &&
         !controller.signal.aborted &&
         isRetryableError(error)
       ) {
         attempt++;
-        console.log(
-          `Retrying in ${retryDelay}ms... (attempt ${
-            attempt + 1
-          }/${retryAttempts})`
-        );
 
-        // Show retry message to user
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === messageId
@@ -132,7 +94,7 @@ export const streamResponse = async (
         await new Promise((resolve) => setTimeout(resolve, retryDelay));
         return attemptRequest();
       } else {
-        throw error; // Final failure
+        throw error;
       }
     }
   };
@@ -140,7 +102,6 @@ export const streamResponse = async (
   try {
     await attemptRequest();
 
-    // Only mark as complete if not aborted
     if (!controller.signal.aborted) {
       setMessages((prev) =>
         prev.map((msg) =>
@@ -150,16 +111,11 @@ export const streamResponse = async (
         )
       );
     }
-  } catch (error: any) {
-    // Don't show error if user cancelled
-    if (error.name === "AbortError" || controller.signal.aborted) {
-      console.log("Stream cancelled by user");
+  } catch (error: unknown) {
+    if ((error as Error).name === "AbortError" || controller.signal.aborted) {
       return;
     }
 
-    console.error("Final streaming error:", error);
-
-    // Enhanced error messages
     const errorMessage = getErrorMessage(error);
 
     setMessages((prev) =>
@@ -175,14 +131,12 @@ export const streamResponse = async (
       )
     );
   } finally {
-    // Only set loading false if not aborted (handleStopStreaming will handle it)
     if (!controller.signal.aborted) {
       setIsLoading(false);
     }
   }
 };
 
-// Smart conversation context preparation with token management
 function prepareConversationContext(
   conversationHistory: ChatMessage[],
   currentPrompt: string
@@ -191,10 +145,9 @@ function prepareConversationContext(
   content: string;
   attachments?: UploadedFile[];
 }> {
-  const maxContextTokens = 6000; // Conservative limit for Gemini
-  const estimatedTokensPerChar = 0.25; // Rough estimation
+  const maxContextTokens = CHAT_CONFIG.MAX_CONTEXT_TOKENS;
+  const estimatedTokensPerChar = CHAT_CONFIG.TOKENS_PER_CHAR;
 
-  // Start with current prompt tokens
   let totalTokens = currentPrompt.length * estimatedTokensPerChar;
   const contextMessages: Array<{
     role: "user" | "assistant";
@@ -202,7 +155,6 @@ function prepareConversationContext(
     attachments?: UploadedFile[];
   }> = [];
 
-  // Add messages from newest to oldest until we hit token limit
   const reversedHistory = [...conversationHistory]
     .filter((msg) => !msg.isStreaming && msg.content.trim())
     .reverse();
@@ -223,25 +175,14 @@ function prepareConversationContext(
       content: msg.content,
     };
 
-    // Include attachments for user messages
     if (msg.isUser && msg.attachments && msg.attachments.length > 0) {
       contextMessage.attachments = msg.attachments;
-      console.log(
-        `Including ${
-          msg.attachments.length
-        } attachments in context for message: ${msg.content.substring(
-          0,
-          50
-        )}...`
-      );
     }
 
     contextMessages.unshift(contextMessage);
     totalTokens += messageTokens;
   }
 
-  // Don't add current prompt again - it's already in the conversation history
-  // Only add if the conversation history is empty or doesn't contain the current prompt
   const lastMessage = conversationHistory[conversationHistory.length - 1];
   if (!lastMessage || lastMessage.content !== currentPrompt) {
     contextMessages.push({
@@ -250,15 +191,9 @@ function prepareConversationContext(
     });
   }
 
-  console.log(
-    `Context: ${contextMessages.length} messages, ~${Math.round(
-      totalTokens
-    )} tokens`
-  );
   return contextMessages;
 }
 
-// Enhanced stream processing with better parsing
 async function processStream(
   body: ReadableStream<Uint8Array>,
   messageId: string,
@@ -272,18 +207,13 @@ async function processStream(
 
   try {
     while (true) {
-      if (controller.signal.aborted) {
-        console.log("Stream processing aborted");
-        break;
-      }
+      if (controller.signal.aborted) break;
 
       const { done, value } = await reader.read();
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split("\n");
-
-      // Keep the last incomplete line in buffer
       buffer = lines.pop() || "";
 
       for (const line of lines) {
@@ -292,32 +222,19 @@ async function processStream(
         const trimmedLine = line.trim();
         if (!trimmedLine) continue;
 
-        // Enhanced parsing for different data stream formats
         if (trimmedLine.startsWith("0:")) {
-          // Text content
           const content = parseContentLine(trimmedLine.slice(2));
           if (content) {
             currentContent += content;
             updateMessageContent(messageId, currentContent, setMessages);
           }
         } else if (trimmedLine.startsWith("e:")) {
-          // End of stream
-          console.log("Stream ended:", trimmedLine);
           break;
-        } else if (trimmedLine.startsWith("d:")) {
-          // Stream data (metadata)
-          try {
-            const data = JSON.parse(trimmedLine.slice(2));
-            console.log("Stream metadata:", data);
-          } catch {
-            // Ignore parsing errors for metadata
-          }
         }
       }
     }
-  } catch (error: any) {
-    if (error.name !== "AbortError") {
-      console.error("Stream processing error:", error);
+  } catch (error: unknown) {
+    if ((error as Error).name !== "AbortError") {
       throw error;
     }
   } finally {
@@ -325,27 +242,23 @@ async function processStream(
   }
 }
 
-// Improved content parsing with better error handling
 function parseContentLine(line: string): string {
   try {
-    // Handle quoted strings
     if (line.startsWith('"') && line.endsWith('"')) {
       return JSON.parse(line);
     }
     return line;
   } catch {
-    return line; // Fallback to raw line
+    return line;
   }
 }
 
-// Optimized message updates to prevent unnecessary re-renders
 let updateTimeout: NodeJS.Timeout | null = null;
 function updateMessageContent(
   messageId: string,
   content: string,
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>
 ): void {
-  // Throttle updates to prevent too many re-renders
   if (updateTimeout) {
     clearTimeout(updateTimeout);
   }
@@ -354,11 +267,10 @@ function updateMessageContent(
     setMessages((prev) =>
       prev.map((msg) => (msg.id === messageId ? { ...msg, content } : msg))
     );
-  }, 16); // ~60fps
+  }, CHAT_CONFIG.UPDATE_THROTTLE);
 }
 
-// Error classification for retry logic
-function isRetryableError(error: any): boolean {
+function isRetryableError(error: unknown): boolean {
   const retryableErrors = [
     "network error",
     "timeout",
@@ -369,17 +281,16 @@ function isRetryableError(error: any): boolean {
     "connection",
   ];
 
-  const errorMessage = error.message?.toLowerCase() || "";
+  const errorMessage = (error as Error).message?.toLowerCase() || "";
   return retryableErrors.some((keyword) => errorMessage.includes(keyword));
 }
 
-// Enhanced error messages for better user experience
-function getErrorMessage(error: any): string {
-  if (error.name === "AbortError") {
+function getErrorMessage(error: unknown): string {
+  if ((error as Error).name === "AbortError") {
     return "Response cancelled";
   }
 
-  const errorMsg = error.message?.toLowerCase() || "";
+  const errorMsg = (error as Error).message?.toLowerCase() || "";
 
   if (errorMsg.includes("rate limit") || errorMsg.includes("quota")) {
     return "⚠️ Rate limit reached. Please wait a moment and try again.";

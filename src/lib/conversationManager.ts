@@ -10,6 +10,34 @@ export interface ChatAttachment {
   uploadedAt: Date;
 }
 
+interface ServerAttachment {
+  originalName: string;
+  cloudinaryUrl: string;
+  cloudinaryPublicId: string;
+  fileType: string;
+  fileSize: number;
+  isImage: boolean;
+  uploadedAt: string;
+}
+
+interface ServerMessage {
+  id: string;
+  content: string;
+  role: 'user' | 'assistant';
+  timestamp: string;
+  attachments?: ServerAttachment[];
+}
+
+interface CreateConversationRequest {
+  title?: string;
+  firstMessage?: ServerMessage;
+}
+
+interface UpdateConversationRequest {
+  messages: ServerMessage[];
+  title?: string;
+}
+
 export interface ChatMessage {
   id: string;
   content: string;
@@ -32,26 +60,26 @@ export class ConversationManager {
   private static readonly API_BASE = '/api/conversations';
 
   // Transform server message format to client format
-  private static transformMessage(serverMessage: any): ChatMessage {
+  private static transformMessage(serverMessage: ServerMessage): ChatMessage {
     return {
       id: serverMessage.id,
       content: serverMessage.content,
       isUser: serverMessage.role === 'user',
       timestamp: serverMessage.timestamp,
-      attachments: serverMessage.attachments?.map((att: any) => ({
+      attachments: serverMessage.attachments?.map((att: ServerAttachment) => ({
         originalName: att.originalName,
         cloudinaryUrl: att.cloudinaryUrl,
         cloudinaryPublicId: att.cloudinaryPublicId,
         fileType: att.fileType,
         fileSize: att.fileSize,
         isImage: att.isImage,
-        uploadedAt: att.uploadedAt
+        uploadedAt: new Date(att.uploadedAt)
       })) || []
     };
   }
 
   // Transform client message format to server format
-  private static transformMessageToServer(clientMessage: ChatMessage) {
+  private static transformMessageToServer(clientMessage: ChatMessage): ServerMessage {
     return {
       id: clientMessage.id,
       role: clientMessage.isUser ? 'user' : 'assistant',
@@ -64,7 +92,7 @@ export class ConversationManager {
         fileType: att.fileType,
         fileSize: att.fileSize,
         isImage: att.isImage,
-        uploadedAt: att.uploadedAt
+        uploadedAt: att.uploadedAt.toISOString()
       })) || []
     };
   }
@@ -111,7 +139,7 @@ export class ConversationManager {
   // Create a new conversation
   static async createNewConversation(title?: string, firstMessage?: ChatMessage): Promise<Conversation | null> {
     try {
-      const requestBody: any = {};
+      const requestBody: CreateConversationRequest = {};
       
       if (title) {
         requestBody.title = title;
@@ -147,7 +175,7 @@ export class ConversationManager {
     try {
       const serverMessages = messages.map(this.transformMessageToServer);
       
-      const requestBody: any = { messages: serverMessages };
+      const requestBody: UpdateConversationRequest = { messages: serverMessages };
       if (title) {
         requestBody.title = title;
       }

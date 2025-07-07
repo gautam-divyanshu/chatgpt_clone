@@ -8,8 +8,7 @@ export class Mem0Service {
     try {
       this.client = createMem0Client();
       if (!this.client) {
-        this.initError =
-          "Failed to create Mem0 client - check API key and package installation";
+        this.initError = "Failed to create Mem0 client - check API key and package installation";
       }
     } catch (error) {
       this.initError = `Mem0 initialization error: ${
@@ -19,20 +18,14 @@ export class Mem0Service {
     }
   }
 
-  // Check if Mem0 is available
   isAvailable(): boolean {
     return this.client !== null;
   }
 
-  // Get initialization error if any
   getInitError(): string | null {
     return this.initError;
   }
 
-  // Remove debug method since we don't need it
-  // getStatus() method removed
-
-  // Add memory for a user and conversation
   async addMemory(
     message: string | any[],
     userId: string,
@@ -47,7 +40,6 @@ export class Mem0Service {
     }
 
     try {
-      // Convert single message to messages format if needed
       let messages;
       if (typeof message === "string") {
         messages = [{ role: "user", content: message }];
@@ -55,27 +47,31 @@ export class Mem0Service {
         messages = message;
       }
 
-      // Prepare options according to mem0ai format
       const options: any = { user_id: userId };
       if (conversationId) {
         options.conversation_id = conversationId;
       }
       if (metadata) {
         options.metadata = {
-          timestamp: new Date().toISOString(),
           ...metadata,
+          timestamp: new Date().toISOString(),
+          conversation_id: conversationId, // Explicitly store conversation ID in metadata
+        };
+      } else if (conversationId) {
+        // Ensure conversation_id is always in metadata
+        options.metadata = {
+          timestamp: new Date().toISOString(),
+          conversation_id: conversationId,
         };
       }
 
       const response = await this.client.add(messages, options);
-      console.log("Memory added successfully:", response);
 
       return {
         success: true,
         memoryId: response.id || response.memory_id || response.message,
       };
     } catch (error) {
-      console.error("Error adding memory:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -83,7 +79,51 @@ export class Mem0Service {
     }
   }
 
-  // Search memories for a user
+  // Search memories for a user within a specific conversation only
+  async searchConversationMemories(
+    query: string,
+    userId: string,
+    conversationId: string,
+    limit: number = 10
+  ): Promise<{ success: boolean; memories?: any[]; error?: string }> {
+    if (!this.client) {
+      return {
+        success: false,
+        error: this.initError || "Mem0 client not available",
+      };
+    }
+
+    try {
+      // First get conversation memories, then filter by search query locally
+      const conversationResult = await this.getConversationMemories(
+        conversationId,
+        userId,
+        limit * 2 // Get more to filter locally
+      );
+
+      if (!conversationResult.success || !conversationResult.memories) {
+        return { success: true, memories: [] };
+      }
+
+      // Filter memories that match the query
+      const filteredMemories = conversationResult.memories.filter(memory => {
+        const content = memory.text || memory.memory || memory.content || '';
+        return content.toLowerCase().includes(query.toLowerCase());
+      }).slice(0, limit);
+
+      return {
+        success: true,
+        memories: filteredMemories,
+      };
+    } catch (error) {
+      console.error('Error searching conversation memories:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
   async searchMemories(
     query: string,
     userId: string,
@@ -99,14 +139,12 @@ export class Mem0Service {
     try {
       const options = { user_id: userId, limit };
       const response = await this.client.search(query, options);
-      console.log("Search response:", response);
 
       return {
         success: true,
         memories: response.results || response || [],
       };
     } catch (error) {
-      console.error("Error searching memories:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -114,7 +152,6 @@ export class Mem0Service {
     }
   }
 
-  // Get all memories for a user
   async getUserMemories(
     userId: string,
     limit: number = 50
@@ -129,14 +166,12 @@ export class Mem0Service {
     try {
       const options = { user_id: userId, limit };
       const response = await this.client.getAll(options);
-      console.log("GetAll response:", response);
 
       return {
         success: true,
         memories: response.results || response || [],
       };
     } catch (error) {
-      console.error("Error getting user memories:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -144,7 +179,6 @@ export class Mem0Service {
     }
   }
 
-  // Get memories for a specific conversation
   async getConversationMemories(
     conversationId: string,
     userId: string,
@@ -164,14 +198,12 @@ export class Mem0Service {
         limit,
       };
       const response = await this.client.getAll(options);
-      console.log("Conversation memories response:", response);
 
       return {
         success: true,
         memories: response.results || response || [],
       };
     } catch (error) {
-      console.error("Error getting conversation memories:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -179,10 +211,7 @@ export class Mem0Service {
     }
   }
 
-  // Delete a specific memory
-  async deleteMemory(
-    memoryId: string
-  ): Promise<{ success: boolean; error?: string }> {
+  async deleteMemory(memoryId: string): Promise<{ success: boolean; error?: string }> {
     if (!this.client) {
       return {
         success: false,
@@ -194,7 +223,6 @@ export class Mem0Service {
       await this.client.delete(memoryId);
       return { success: true };
     } catch (error) {
-      console.error("Error deleting memory:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -202,7 +230,6 @@ export class Mem0Service {
     }
   }
 
-  // Extract relevant memories for context injection
   async getRelevantMemories(
     currentMessage: string,
     userId: string,
@@ -214,18 +241,53 @@ export class Mem0Service {
     }
 
     try {
-      // Search for relevant memories based on current message
-      const searchResult = await this.searchMemories(
-        currentMessage,
-        userId,
-        limit
-      );
+      // Get all user memories and filter client-side for conversation isolation
+      // This is more reliable than depending on Mem0's conversation_id filtering
+      const allMemoriesResult = await this.getUserMemories(userId, 50);
+
+      if (!allMemoriesResult.success || !allMemoriesResult.memories) {
+        return [];
+      }
+
+      // Filter memories that belong to this specific conversation
+      const conversationMemories = allMemoriesResult.memories.filter(memory => {
+        const memoryConvId = memory.metadata?.conversation_id;
+        return memoryConvId === conversationId;
+      });
+
+      // Extract and return memory content
+      const relevantMemories = conversationMemories
+        .slice(0, limit)
+        .map((memory) => memory.text || memory.memory || memory.content)
+        .filter(Boolean);
+
+      console.log(`Retrieved ${relevantMemories.length} memories from conversation ${conversationId} (filtered from ${allMemoriesResult.memories.length} total)`);
+      return relevantMemories;
+    } catch (error) {
+      console.error('Error getting relevant memories:', error);
+      return [];
+    }
+  }
+
+  // Optional: Method to get global user memories across conversations
+  // (not used by default to ensure fresh conversations)
+  async getGlobalUserMemories(
+    currentMessage: string,
+    userId: string,
+    conversationId: string,
+    limit: number = 5
+  ): Promise<string[]> {
+    if (!this.client) {
+      return [];
+    }
+
+    try {
+      const searchResult = await this.searchMemories(currentMessage, userId, limit);
 
       if (!searchResult.success || !searchResult.memories) {
         return [];
       }
 
-      // Also get recent conversation memories
       const conversationResult = await this.getConversationMemories(
         conversationId,
         userId,
@@ -237,7 +299,6 @@ export class Mem0Service {
         ...(conversationResult.memories || []),
       ];
 
-      // Remove duplicates and format for context
       const uniqueMemories = Array.from(
         new Map(allMemories.map((m) => [m.id, m])).values()
       );
@@ -247,11 +308,9 @@ export class Mem0Service {
         .map((memory) => memory.text || memory.memory || memory.content)
         .filter(Boolean);
     } catch (error) {
-      console.error("Error getting relevant memories:", error);
       return [];
     }
   }
 }
 
-// Export singleton instance
 export const mem0Service = new Mem0Service();

@@ -2,6 +2,8 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { ChatMessage } from "./types";
 import { UploadedFile } from "./upload-types";
 import { streamResponse } from "./realApi";
+import { CHAT_CONFIG } from "@/config";
+import { generateMessageId, getUserIdFromStorage } from "@/lib/utils";
 import {
   ConversationManager,
   type ChatMessage as DbChatMessage,
@@ -13,239 +15,158 @@ export function useChatLogic(conversationId?: string | null) {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
-  const [currentConversationId, setCurrentConversationId] = useState<
-    string | null
-  >(conversationId || null);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(
+    conversationId || null
+  );
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   
-  // Memory-related state - generate consistent user ID
-  const [userId] = useState(() => {
-    // Try to get user ID from localStorage or generate a new one
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('chatgpt-user-id');
-      if (stored) return stored;
-      
-      const newUserId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem('chatgpt-user-id', newUserId);
-      return newUserId;
-    }
-    return `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  });
+  const [userId] = useState(() => getUserIdFromStorage());
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const streamingControllerRef = useRef<AbortController | null>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Transform database message to component message
-  const transformDbMessage = useCallback(
-    (dbMessage: DbChatMessage): ChatMessage => {
-      return {
-        id: dbMessage.id,
-        content: dbMessage.content,
-        isUser: dbMessage.isUser,
-        timestamp: new Date(dbMessage.timestamp).toLocaleTimeString(),
-        status: "sent",
-        attachments:
-          dbMessage.attachments?.map((att: ChatAttachment) => ({
-            id: att.cloudinaryPublicId,
-            url: att.cloudinaryUrl,
-            originalName: att.originalName,
-            size: att.fileSize,
-            type: att.fileType,
-            isImage: att.isImage,
-            isDocument: !att.isImage,
-            width: null,
-            height: null,
-            format: att.fileType.split("/")[1] || "unknown",
-            createdAt: new Date(att.uploadedAt).toISOString(),
-          })) || [],
-      };
-    },
-    []
-  );
+  const transformDbMessage = useCallback((dbMessage: DbChatMessage): ChatMessage => {
+    return {
+      id: dbMessage.id,
+      content: dbMessage.content,
+      isUser: dbMessage.isUser,
+      timestamp: new Date(dbMessage.timestamp).toLocaleTimeString(),
+      status: "sent",
+      attachments: dbMessage.attachments?.map((att: ChatAttachment) => ({
+        id: att.cloudinaryPublicId,
+        url: att.cloudinaryUrl,
+        originalName: att.originalName,
+        size: att.fileSize,
+        type: att.fileType,
+        isImage: att.isImage,
+        isDocument: !att.isImage,
+        width: null,
+        height: null,
+        format: att.fileType.split("/")[1] || "unknown",
+        createdAt: new Date(att.uploadedAt).toISOString(),
+      })) || [],
+    };
+  }, []);
 
-  // Transform component message to database message
-  const transformToDbMessage = useCallback(
-    (message: ChatMessage): DbChatMessage => {
-      return {
-        id: message.id,
-        content: message.content,
-        isUser: message.isUser,
-        timestamp: new Date().toISOString(),
-        attachments:
-          message.attachments?.map((att: UploadedFile) => ({
-            originalName: att.originalName,
-            cloudinaryUrl: att.url,
-            cloudinaryPublicId: att.id,
-            fileType: att.type,
-            fileSize: att.size,
-            isImage: att.isImage,
-            uploadedAt: new Date(att.createdAt),
-          })) || [],
-      };
-    },
-    []
-  );
+  const transformToDbMessage = useCallback((message: ChatMessage): DbChatMessage => {
+    return {
+      id: message.id,
+      content: message.content,
+      isUser: message.isUser,
+      timestamp: new Date().toISOString(),
+      attachments: message.attachments?.map((att: UploadedFile) => ({
+        originalName: att.originalName,
+        cloudinaryUrl: att.url,
+        cloudinaryPublicId: att.id,
+        fileType: att.type,
+        fileSize: att.size,
+        isImage: att.isImage,
+        uploadedAt: new Date(att.createdAt),
+      })) || [],
+    };
+  }, []);
 
-  // Auto-save messages to database with debouncing
-  const autoSaveMessages = useCallback(
-    async (newMessages: ChatMessage[], convId?: string) => {
-      if (!convId || newMessages.length === 0) return;
+  const autoSaveMessages = useCallback(async (newMessages: ChatMessage[], convId?: string) => {
+    if (!convId || newMessages.length === 0) return;
 
-      // Clear existing timeout
-      if (autoSaveTimeoutRef.current) {
-        clearTimeout(autoSaveTimeoutRef.current);
-      }
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
 
-      // Debounce auto-save by 1 second (reduced from 2 seconds for better responsiveness)
-      autoSaveTimeoutRef.current = setTimeout(async () => {
-        try {
-          // Only save non-streaming messages
-          const completedMessages = newMessages.filter(
-            (msg) => !msg.isStreaming && msg.content.trim()
-          );
-          if (completedMessages.length > 0) {
-            const dbMessages = completedMessages.map(transformToDbMessage);
-            await ConversationManager.updateConversation(convId, dbMessages);
-            console.log(
-              "💾 Auto-saved conversation:",
-              convId,
-              "with",
-              completedMessages.length,
-              "messages"
-            );
-          }
-        } catch (error) {
-          console.error("Auto-save failed:", error);
-        }
-      }, 1000);
-    },
-    [transformToDbMessage]
-  );
-
-  // Create new conversation
-  const createNewConversation = useCallback(
-    async (firstMessage?: ChatMessage) => {
+    autoSaveTimeoutRef.current = setTimeout(async () => {
       try {
-        const dbFirstMessage = firstMessage
-          ? transformToDbMessage(firstMessage)
-          : undefined;
-        const conversation = await ConversationManager.createNewConversation(
-          undefined,
-          dbFirstMessage
+        const completedMessages = newMessages.filter(
+          (msg) => !msg.isStreaming && msg.content.trim()
         );
-
-        if (conversation) {
-          setCurrentConversationId(conversation.id);
-          console.log("✅ Created new conversation:", conversation.id);
-          return conversation.id;
+        if (completedMessages.length > 0) {
+          const dbMessages = completedMessages.map(transformToDbMessage);
+          await ConversationManager.updateConversation(convId, dbMessages);
         }
       } catch (error) {
-        console.error("Failed to create new conversation:", error);
+        console.error("Auto-save failed:", error);
       }
-      return null;
-    },
-    [transformToDbMessage]
-  );
+    }, CHAT_CONFIG.AUTO_SAVE_DELAY);
+  }, [transformToDbMessage]);
 
-  // Load conversation from database
-  const loadConversation = useCallback(
-    async (convId: string) => {
-      if (!convId) return;
+  const createNewConversation = useCallback(async (firstMessage?: ChatMessage) => {
+    try {
+      const dbFirstMessage = firstMessage ? transformToDbMessage(firstMessage) : undefined;
+      const conversation = await ConversationManager.createNewConversation(
+        undefined,
+        dbFirstMessage
+      );
 
-      setIsLoadingConversation(true);
-      try {
-        const conversation = await ConversationManager.getConversation(convId);
-        if (conversation && conversation.messages) {
-          const transformedMessages =
-            conversation.messages.map(transformDbMessage);
-          setMessages(transformedMessages);
-          setCurrentConversationId(convId);
-          console.log(
-            "✅ Loaded conversation:",
-            convId,
-            "with",
-            transformedMessages.length,
-            "messages"
-          );
-        }
-      } catch (error) {
-        console.error("Failed to load conversation:", error);
-      } finally {
-        setIsLoadingConversation(false);
+      if (conversation) {
+        setCurrentConversationId(conversation.id);
+        return conversation.id;
       }
-    },
-    [transformDbMessage]
-  );
+    } catch (error) {
+      console.error("Failed to create new conversation:", error);
+    }
+    return null;
+  }, [transformToDbMessage]);
 
-  // Switch to a different conversation
-  const switchConversation = useCallback(
-    async (convId: string | null) => {
-      if (convId === currentConversationId) return;
+  const loadConversation = useCallback(async (convId: string) => {
+    if (!convId) return;
 
-      // Don't switch if we're currently loading a response
-      if (isLoading) {
-        console.log(
-          "🔄 Skipping conversation switch - currently loading response"
-        );
-        return;
+    setIsLoadingConversation(true);
+    try {
+      const conversation = await ConversationManager.getConversation(convId);
+      if (conversation && conversation.messages) {
+        const transformedMessages = conversation.messages.map(transformDbMessage);
+        setMessages(transformedMessages);
+        setCurrentConversationId(convId);
       }
+    } catch (error) {
+      console.error("Failed to load conversation:", error);
+    } finally {
+      setIsLoadingConversation(false);
+    }
+  }, [transformDbMessage]);
 
-      if (convId) {
-        await loadConversation(convId);
-      } else {
-        // Start fresh conversation
-        setMessages([]);
-        setCurrentConversationId(null);
-      }
-    },
-    [currentConversationId, loadConversation, isLoading]
-  );
+  const switchConversation = useCallback(async (convId: string | null) => {
+    if (convId === currentConversationId || isLoading) return;
 
-  // Auto-save when messages change - This will catch both user messages AND AI responses
+    if (convId) {
+      await loadConversation(convId);
+    } else {
+      setMessages([]);
+      setCurrentConversationId(null);
+    }
+  }, [currentConversationId, loadConversation, isLoading]);
+
   useEffect(() => {
     if (currentConversationId && messages.length > 0) {
-      // Check if there are any completed (non-streaming) messages
       const hasCompletedMessages = messages.some(
         (msg) => !msg.isStreaming && msg.content.trim()
       );
       if (hasCompletedMessages) {
-        console.log("🔄 Triggering auto-save for", messages.length, "messages");
         autoSaveMessages(messages, currentConversationId);
       }
     }
   }, [messages, currentConversationId, autoSaveMessages]);
 
-  // Additional auto-save when loading state changes (AI response completes)
   useEffect(() => {
     if (!isLoading && currentConversationId && messages.length > 0) {
-      // AI response just completed, make sure it's saved
       const lastMessage = messages[messages.length - 1];
-      if (
-        !lastMessage.isUser &&
-        !lastMessage.isStreaming &&
-        lastMessage.content.trim()
-      ) {
-        console.log("🔄 AI response completed, force saving...");
+      if (!lastMessage.isUser && !lastMessage.isStreaming && lastMessage.content.trim()) {
         autoSaveMessages(messages, currentConversationId);
       }
     }
   }, [isLoading, messages, currentConversationId, autoSaveMessages]);
 
-  // Check if user is scrolled to bottom
   const isScrolledToBottom = () => {
     if (!chatContainerRef.current) return true;
     const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
     return Math.abs(scrollHeight - clientHeight - scrollTop) < 50;
   };
 
-  // Handle scroll events to detect manual scrolling
   const handleScroll = () => {
     setShouldAutoScroll(isScrolledToBottom());
   };
 
-  // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = useCallback(() => {
     if (shouldAutoScroll) {
       messagesEndRef.current?.scrollIntoView({
@@ -255,19 +176,17 @@ export function useChatLogic(conversationId?: string | null) {
     }
   }, [shouldAutoScroll]);
 
-  // Stop/Pause streaming
   const handleStopStreaming = () => {
     if (streamingControllerRef.current) {
       try {
         streamingControllerRef.current.abort();
       } catch {
-        console.log("Stream aborted by user");
+        // Ignore abort errors
       }
       streamingControllerRef.current = null;
     }
 
     setIsLoading(false);
-
     setMessages((prev) =>
       prev.map((msg) => {
         if (msg.isStreaming) {
@@ -283,22 +202,9 @@ export function useChatLogic(conversationId?: string | null) {
     );
   };
 
-  const handleSendMessage = async (
-    content: string,
-    attachments?: UploadedFile[]
-  ) => {
-    if (
-      (!content.trim() && (!attachments || attachments.length === 0)) ||
-      isLoading
-    )
-      return;
+  const handleSendMessage = async (content: string, attachments?: UploadedFile[]) => {
+    if ((!content.trim() && (!attachments || attachments.length === 0)) || isLoading) return;
 
-    console.log("=== SENDING MESSAGE ===");
-    console.log("Content:", content);
-    console.log("Attachments:", attachments?.length || 0);
-    console.log("Current conversation ID:", currentConversationId);
-
-    // Cancel any ongoing streaming
     if (streamingControllerRef.current) {
       try {
         streamingControllerRef.current.abort();
@@ -308,7 +214,7 @@ export function useChatLogic(conversationId?: string | null) {
     }
 
     const userMessage: ChatMessage = {
-      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: generateMessageId(),
       content,
       isUser: true,
       timestamp: new Date().toLocaleTimeString(),
@@ -316,22 +222,18 @@ export function useChatLogic(conversationId?: string | null) {
       attachments: attachments || [],
     };
 
-    // Create new conversation if none exists
     let convId = currentConversationId;
     let updatedMessages = messages;
 
     if (!convId) {
-      console.log("🔄 Creating new conversation...");
       convId = await createNewConversation(userMessage);
       if (!convId) {
         console.error("Failed to create conversation");
         return;
       }
-      // Add user message to state
       updatedMessages = [userMessage];
       setMessages(updatedMessages);
     } else {
-      // Add to existing conversation
       updatedMessages = [...messages, userMessage];
       setMessages(updatedMessages);
     }
@@ -340,9 +242,7 @@ export function useChatLogic(conversationId?: string | null) {
     setIsLoading(true);
     setShouldAutoScroll(true);
 
-    const aiMessageId = `msg_${Date.now() + 1}_${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
+    const aiMessageId = generateMessageId();
     const aiMessage: ChatMessage = {
       id: aiMessageId,
       content: "",
@@ -356,25 +256,7 @@ export function useChatLogic(conversationId?: string | null) {
 
     const controller = new AbortController();
     streamingControllerRef.current = controller;
-
-    // Build conversation history - for both new and existing conversations,
-    // we want to include all messages up to this point
     const conversationHistory = updatedMessages;
-
-    console.log("=== CONVERSATION HISTORY DEBUG ===");
-    console.log("Conversation ID:", convId);
-    console.log("Current conversation ID:", currentConversationId);
-    console.log("Updated messages:", updatedMessages.length);
-    console.log("Conversation history:", conversationHistory.length);
-    console.log(
-      "History contents:",
-      conversationHistory.map((msg) => ({
-        id: msg.id,
-        isUser: msg.isUser,
-        content: msg.content.substring(0, 50) + "...",
-        attachments: msg.attachments?.length || 0,
-      }))
-    );
 
     try {
       await streamResponse(
@@ -384,14 +266,10 @@ export function useChatLogic(conversationId?: string | null) {
         setIsLoading,
         controller,
         conversationHistory,
-        {
-          retryAttempts: 3,
-          retryDelay: 1000,
-          timeoutMs: 30000,
-        },
+        { retryAttempts: 3, retryDelay: 1000, timeoutMs: 30000 },
         attachments || [],
-        userId, // Pass user ID for memory
-        convId  // Pass conversation ID for memory
+        userId,
+        convId
       );
     } catch (error: unknown) {
       if (error instanceof Error && error.name !== "AbortError") {
@@ -400,7 +278,6 @@ export function useChatLogic(conversationId?: string | null) {
     }
   };
 
-  // Enhanced message editing
   const handleEditMessage = (messageId: string) => {
     setMessages((prev) =>
       prev.map((msg) =>
@@ -444,9 +321,7 @@ export function useChatLogic(conversationId?: string | null) {
     setIsLoading(true);
     setShouldAutoScroll(true);
 
-    const aiMessageId = `msg_${Date.now() + 1}_${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
+    const aiMessageId = generateMessageId();
     const aiMessage: ChatMessage = {
       id: aiMessageId,
       content: "",
@@ -469,14 +344,10 @@ export function useChatLogic(conversationId?: string | null) {
         setIsLoading,
         controller,
         updatedMessages,
-        {
-          retryAttempts: 3,
-          retryDelay: 1000,
-          timeoutMs: 30000,
-        },
+        { retryAttempts: 3, retryDelay: 1000, timeoutMs: 30000 },
         editedMessage.attachments || [],
-        userId, // Pass user ID for memory
-        currentConversationId || undefined // Pass conversation ID for memory
+        userId,
+        currentConversationId || undefined
       );
     } catch (error: unknown) {
       if (error instanceof Error && error.name !== "AbortError") {
@@ -549,14 +420,10 @@ export function useChatLogic(conversationId?: string | null) {
         setIsLoading,
         controller,
         conversationHistory,
-        {
-          retryAttempts: 2,
-          retryDelay: 500,
-          timeoutMs: 30000,
-        },
+        { retryAttempts: 2, retryDelay: 500, timeoutMs: 30000 },
         userMessage.attachments || [],
-        userId, // Pass user ID for memory
-        currentConversationId || undefined // Pass conversation ID for memory
+        userId,
+        currentConversationId || undefined
       );
     } catch (error: unknown) {
       if (error instanceof Error && error.name !== "AbortError") {
@@ -565,7 +432,6 @@ export function useChatLogic(conversationId?: string | null) {
     }
   };
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (autoSaveTimeoutRef.current) {

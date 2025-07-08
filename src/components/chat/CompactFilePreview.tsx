@@ -8,9 +8,18 @@ import { getFileIcon, isImageFile } from '../../lib/upload-utils';
 interface CompactFilePreviewProps {
   file: UploadedFile;
   onRemove: () => void;
+  isProcessing?: boolean;
+  processingError?: string | null;
+  isProcessed?: boolean;
 }
 
-export function CompactFilePreview({ file, onRemove }: CompactFilePreviewProps) {
+export function CompactFilePreview({ 
+  file, 
+  onRemove, 
+  isProcessing = false, 
+  processingError = null,
+  isProcessed = false 
+}: CompactFilePreviewProps) {
   const [showFullscreen, setShowFullscreen] = useState(false);
   const [showDocumentViewer, setShowDocumentViewer] = useState(false);
   const isImage = isImageFile(file.type);
@@ -38,6 +47,41 @@ export function CompactFilePreview({ file, onRemove }: CompactFilePreviewProps) 
     }
   };
 
+  const getProcessingStatusIcon = () => {
+    if (isProcessing) {
+      return (
+        <div className="absolute -top-1 -left-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
+          <svg className="w-2 h-2 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </div>
+      );
+    }
+    
+    if (processingError) {
+      return (
+        <div className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center" title={processingError}>
+          <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </div>
+      );
+    }
+    
+    if (isProcessed && file.isDocument) {
+      return (
+        <div className="absolute -top-1 -left-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center" title="Document processed - ready for AI questions">
+          <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+      );
+    }
+    
+    return null;
+  };
+
   return (
     <>
       <div className="relative inline-block group">
@@ -62,18 +106,23 @@ export function CompactFilePreview({ file, onRemove }: CompactFilePreviewProps) 
             ) : (
               // Document icon - clean, no borders
               <div 
-                className="w-12 h-12 rounded cursor-pointer flex items-center justify-center text-2xl hover:opacity-80 transition-opacity"
+                className={`w-12 h-12 rounded cursor-pointer flex items-center justify-center text-2xl hover:opacity-80 transition-opacity ${
+                  isProcessing ? 'opacity-60' : ''
+                }`}
                 onClick={handleClick}
-                title={`Click to preview ${file.originalName}`}
+                title={`Click to preview ${file.originalName}${isProcessed ? ' (AI processed)' : ''}`}
               >
                 {getFileIcon(file.type)}
               </div>
             )}
             
+            {/* Processing status indicator */}
+            {getProcessingStatusIcon()}
+            
             {/* Remove button - appears on hover */}
             <button
               onClick={handleRemove}
-              className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+              className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10"
               title="Remove file"
             >
               <svg
@@ -92,11 +141,20 @@ export function CompactFilePreview({ file, onRemove }: CompactFilePreviewProps) 
             </button>
           </div>
 
-          {/* Filename */}
+          {/* Filename with processing status */}
           <div className="mt-1 max-w-[80px] text-center">
             <span className="text-xs chatgpt-text-muted truncate block" title={file.originalName}>
               {file.originalName}
             </span>
+            {file.isDocument && (
+              <div className="text-xs text-center mt-0.5">
+                {isProcessing && <span className="text-blue-400">Processing...</span>}
+                {processingError && <span className="text-red-400">Error</span>}
+                {isProcessed && !isProcessing && !processingError && (
+                  <span className="text-green-400">AI Ready</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -161,6 +219,11 @@ export function CompactFilePreview({ file, onRemove }: CompactFilePreviewProps) 
             <div className="flex items-center justify-between p-2 bg-[#2a2a2a] border-b border-gray-600">
               <h3 className="text-sm font-medium text-white truncate">
                 {file.originalName}
+                {isProcessed && (
+                  <span className="ml-2 text-xs bg-green-600 px-2 py-0.5 rounded-full">
+                    AI Processed
+                  </span>
+                )}
               </h3>
               {/* Close button only */}
               <button

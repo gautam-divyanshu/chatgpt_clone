@@ -5,9 +5,11 @@ import { UPLOAD_CONFIG, ENV } from "@/config";
 interface CloudinaryUploadResult {
   public_id: string;
   secure_url: string;
+  url?: string;
   width?: number;
   height?: number;
   format?: string;
+  access_mode?: string;
 }
 
 cloudinary.config({
@@ -50,19 +52,46 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes);
 
     const uploadResult = await new Promise((resolve, reject) => {
+      const uploadOptions: Record<string, unknown> = {
+        resource_type: isImage ? "image" : "raw",
+        folder: isImage ? "chat-images" : "chat-documents",
+        // Don't set custom public_id for documents - let Cloudinary auto-generate
+        ...(isImage && {
+          public_id: `${Date.now()}-${file.name.replace(
+            /[^a-zA-Z0-9.-]/g,
+            "_"
+          )}`,
+        }),
+      };
+      
+      // For documents, try to make them public and let Cloudinary auto-generate public_id
+      if (isDocument) {
+        uploadOptions.type = "upload";
+        uploadOptions.access_mode = "public";
+        uploadOptions.use_filename = true; // Use original filename
+        uploadOptions.unique_filename = true; // Add unique suffix
+      }
+      
+      console.log('📤 Cloudinary upload options:', uploadOptions);
+      
       cloudinary.uploader
         .upload_stream(
-          {
-            resource_type: isImage ? "image" : "raw",
-            folder: isImage ? "chat-images" : "chat-documents",
-            public_id: `${Date.now()}-${file.name.replace(
-              /[^a-zA-Z0-9.-]/g,
-              "_"
-            )}`,
-          },
+          uploadOptions,
           (error, result) => {
-            if (error) reject(error);
-            else resolve(result);
+            if (error) {
+              console.error('❌ Cloudinary upload error:', error);
+              reject(error);
+            } else {
+              console.log('✅ Cloudinary upload result:', {
+                public_id: result?.public_id,
+                secure_url: result?.secure_url,
+                url: result?.url,
+                access_mode: result?.access_mode,
+                type: result?.type,
+                resource_type: result?.resource_type
+              });
+              resolve(result);
+            }
           }
         )
         .end(buffer);
@@ -72,7 +101,7 @@ export async function POST(request: NextRequest) {
 
     const uploadedFile = {
       id: result.public_id,
-      url: result.secure_url,
+      url: result.url || result.secure_url, // Use HTTP URL which might be more accessible
       originalName: file.name,
       size: file.size,
       type: file.type,
@@ -83,6 +112,13 @@ export async function POST(request: NextRequest) {
       format: result.format || file.type.split("/")[1] || "unknown",
       createdAt: new Date().toISOString(),
     };
+
+    console.log('✅ Final uploadedFile object:', {
+      id: uploadedFile.id,
+      url: uploadedFile.url,
+      isDocument: uploadedFile.isDocument,
+      access_mode: result.access_mode
+    });
 
     return NextResponse.json({
       success: true,

@@ -220,6 +220,7 @@ export function ChatGPTMain({
           onSendMessage={handleSendMessage}
           onStopStreaming={handleStopStreaming}
           isLoading={isLoading}
+          conversationId={currentConversationId}
         />
       </div>
 

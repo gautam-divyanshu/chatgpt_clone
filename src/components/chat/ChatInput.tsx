@@ -4,6 +4,8 @@ import { useRef, useEffect, useState } from "react";
 import { FileUpload } from "./FileUpload";
 import { CompactFilePreview } from "./CompactFilePreview";
 import { UploadedFile } from "./upload-types";
+import { useDocumentAI } from "@/hooks/useDocumentAI";
+import { getUserIdFromStorage } from "@/lib/utils";
 import {
   ToolsIcon,
   MicrophoneIcon,
@@ -18,6 +20,7 @@ interface ChatInputProps {
   onSendMessage: (content: string, attachments?: UploadedFile[]) => void;
   onStopStreaming: () => void;
   isLoading: boolean;
+  conversationId?: string | null;
 }
 
 export function ChatInput({
@@ -26,10 +29,21 @@ export function ChatInput({
   onSendMessage,
   onStopStreaming,
   isLoading,
+  conversationId,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachments, setAttachments] = useState<UploadedFile[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [userId] = useState(() => getUserIdFromStorage());
+
+  // Document AI integration
+  const {
+    isProcessing,
+    processedDocuments,
+    processingError,
+    processDocument,
+    clearErrors,
+  } = useDocumentAI();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,9 +84,21 @@ export function ChatInput({
     }
   }, [input]);
 
-  const handleFileUpload = (file: UploadedFile) => {
+  const handleFileUpload = async (file: UploadedFile) => {
     setAttachments((prev) => [...prev, file]);
     setUploadError(null);
+    clearErrors();
+
+    // Auto-process documents with Document AI
+    if (file.isDocument) {
+      try {
+        await processDocument(file, userId, conversationId || undefined);
+      } catch (error) {
+        console.error("Document processing failed:", error);
+        // Don't block the upload, just log the error
+        // User can still send the file, it just won't have AI capabilities
+      }
+    }
   };
 
   const handleUploadError = (error: string) => {
@@ -83,15 +109,33 @@ export function ChatInput({
     setAttachments((prev) => prev.filter((file) => file.id !== fileId));
   };
 
+  // Helper function to get document processing status
+  const getDocumentStatus = (file: UploadedFile) => {
+    if (!file.isDocument)
+      return { isProcessed: false, isProcessing: false, error: null };
+
+    const processed = processedDocuments.find((doc) => doc.fileId === file.id);
+    return {
+      isProcessed: !!processed,
+      isProcessing: isProcessing,
+      error: processingError,
+    };
+  };
+
   return (
     <div className="flex-shrink-0 px-6 py-6">
       <div className="max-w-4xl mx-auto">
-        {/* Upload Error */}
-        {uploadError && (
+        {/* Upload Error or Processing Error */}
+        {(uploadError || processingError) && (
           <div className="mb-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-            <p className="text-sm text-red-400">{uploadError}</p>
+            <p className="text-sm text-red-400">
+              {uploadError || processingError}
+            </p>
             <button
-              onClick={() => setUploadError(null)}
+              onClick={() => {
+                setUploadError(null);
+                clearErrors();
+              }}
               className="text-xs text-red-300 hover:text-red-200 mt-1"
             >
               Dismiss
@@ -104,13 +148,19 @@ export function ChatInput({
           {/* Compact File Attachments - Inside input area */}
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
-              {attachments.map((file) => (
-                <CompactFilePreview
-                  key={file.id}
-                  file={file}
-                  onRemove={() => removeAttachment(file.id)}
-                />
-              ))}
+              {attachments.map((file) => {
+                const status = getDocumentStatus(file);
+                return (
+                  <CompactFilePreview
+                    key={file.id}
+                    file={file}
+                    onRemove={() => removeAttachment(file.id)}
+                    isProcessing={status.isProcessing}
+                    processingError={status.error}
+                    isProcessed={status.isProcessed}
+                  />
+                );
+              })}
             </div>
           )}
 
@@ -137,23 +187,29 @@ export function ChatInput({
           <div className="flex items-center justify-between">
             {/* Left side buttons */}
             <div className="flex items-center gap-2">
-              {/* File Upload Button */}
-              <FileUpload
-                onFileUpload={handleFileUpload}
-                onUploadError={handleUploadError}
-              />
+              {/* File Upload Button with Tooltip */}
+              <div className="relative group">
+                <FileUpload
+                  onFileUpload={handleFileUpload}
+                  onUploadError={handleUploadError}
+                />
+                {/* Tooltip */}
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-10 hidden group-hover:block bg-black text-white text-xs rounded px-3 py-2 whitespace-nowrap shadow-lg">
+                  Supported: PDF, JPG, PNG, GIF, WEBP, BMP, TIFF
+                </div>
+              </div>
 
               {/* Tools Button */}
-                <button
+              <button
                 type="button"
                 className="flex items-center gap-2 px-3 py-2 rounded-full chatgpt-hover transition-colors chatgpt-text opacity-50 cursor-not-allowed"
                 disabled
                 tabIndex={-1}
                 aria-disabled="true"
-                >
+              >
                 <ToolsIcon className="w-5 h-5" />
                 <span className="text-sm">Tools</span>
-                </button>
+              </button>
             </div>
 
             {/* Right side buttons */}

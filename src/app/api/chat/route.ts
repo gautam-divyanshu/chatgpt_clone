@@ -4,6 +4,10 @@ import { mem0Service } from "@/lib/mem0/service";
 import { createErrorResponse, logError } from "@/lib/errors";
 import { generateUserId, generateConversationId, generateMessageId } from "@/lib/utils";
 import { UploadedFile } from "@/components/chat/upload-types";
+import { documentAI } from "@/lib/documentai/service";
+import { ProcessedDocument } from "@/models/ProcessedDocument";
+import connectToDatabase from "@/lib/database";
+
 
 export async function POST(req: Request) {
   try {
@@ -55,7 +59,8 @@ export async function POST(req: Request) {
     const processedMessages = await processMessagesWithAttachments(
       messages,
       attachments,
-      memoryContext
+      memoryContext,
+      finalUserId
     );
 
     // Wait for memory retrieval to complete if it's running
@@ -146,7 +151,8 @@ interface ApiMessage {
 async function processMessagesWithAttachments(
   messages: ApiMessage[],
   attachments: UploadedFile[],
-  memoryContext: string = ""
+  memoryContext: string = "",
+  userId?: string
 ) {
   const processedMessages = [];
 
@@ -173,16 +179,26 @@ async function processMessagesWithAttachments(
           });
         }
 
+        // Check for processed documents
+        const documentContext = await getDocumentContext(messageAttachments, messageContent, userId);
+        if (documentContext) {
+          content.push({
+            type: "text" as const,
+            text: documentContext,
+          });
+        }
+
         for (const attachment of messageAttachments) {
           if (attachment.isImage) {
             content.push({
               type: "image" as const,
               image: attachment.url,
             });
-          } else {
+          } else if (!documentContext) {
+            // Only show fallback message if document wasn't processed
             content.push({
               type: "text" as const,
-              text: `\n[Document uploaded: ${attachment.originalName} (${attachment.type}) - I can see you've uploaded this document, but I can only read images. Please copy and paste any text content you'd like me to analyze.]`,
+              text: `\n[Document uploaded: ${attachment.originalName} (${attachment.type}) - Document processing not available. Please copy and paste any text content you'd like me to analyze.]`,
             });
           }
         }
@@ -206,4 +222,97 @@ async function processMessagesWithAttachments(
   }
 
   return processedMessages;
+}
+
+/**
+ * Get document context from processed documents for relevant attachments
+ */
+async function getDocumentContext(
+  attachments: UploadedFile[],
+  userMessage: string,
+  _userId?: string // eslint-disable-line @typescript-eslint/no-unused-vars
+): Promise<string | null> {
+  try {
+    await connectToDatabase();
+    
+    // Get document attachments only
+    const documentAttachments = attachments.filter(att => att.isDocument);
+    if (documentAttachments.length === 0) {
+      return null;
+    }
+
+    console.log('🔍 Searching for processed documents:', documentAttachments.map(att => ({ fileId: att.id, fileName: att.originalName })));
+
+    // Check if documents are processed
+    const fileIds = documentAttachments.map(att => att.id);
+    const processedDocs = await ProcessedDocument.find({ 
+      fileId: { $in: fileIds } 
+    });
+
+    console.log(`📊 Found ${processedDocs.length} processed documents`);
+
+    if (processedDocs.length === 0) {
+      console.log('🚨 No processed documents found for:', fileIds);
+      
+      // Show what processed documents exist
+      const allDocs = await ProcessedDocument.find({}).select('fileId fileName').limit(10);
+      console.log('📝 Available processed documents:', allDocs.map(doc => ({ fileId: doc.fileId, fileName: doc.fileName })));
+      
+      return null;
+    }
+
+    // Find relevant chunks using simple keyword search
+    let relevantChunks: Array<{ text: string; source: string }> = [];
+    
+    for (const doc of processedDocs) {
+      console.log(`🔍 Searching in document: ${doc.fileName} (${doc.chunks.length} chunks)`);
+      
+      const chunks = documentAI.searchRelevantChunks(
+        doc.chunks,
+        userMessage,
+        2 // Get top 2 chunks per document
+      );
+      
+      console.log(`✅ Found ${chunks.length} relevant chunks in ${doc.fileName}`);
+      
+      chunks.forEach(chunk => {
+        relevantChunks.push({
+          text: chunk.text,
+          source: doc.fileName,
+        });
+      });
+    }
+
+    // Limit total chunks to prevent token overflow
+    relevantChunks = relevantChunks.slice(0, 4);
+
+    if (relevantChunks.length === 0) {
+      // If no relevant chunks found, provide basic document info
+  // const docNames = processedDocs.map(doc => doc.fileName).join(', '); // Unused variable
+      const docContents = processedDocs.map(doc => `${doc.fileName}: ${doc.extractedText.substring(0, 200)}...`).join('\n\n');
+      
+      console.log('💬 No relevant chunks found, providing basic document info');
+      
+      return `\n\n[Documents uploaded and processed]\n${docContents}\n[Please answer based on the document content above]\n`;
+    }
+
+    // Format context for the AI
+  const contextParts = relevantChunks.map(chunk => {
+      return `[From ${chunk.source}]\n${chunk.text}`;
+    });
+
+    const context = `\n\n[Document Context - Use this information to answer the user's question]\n${contextParts.join('\n\n---\n\n')}\n[End Document Context]\n`;
+    
+    console.log('✅ Providing document context:', {
+      chunksCount: relevantChunks.length,
+      sources: [...new Set(relevantChunks.map(c => c.source))],
+      contextLength: context.length
+    });
+    
+    return context;
+    
+  } catch (error) {
+    console.error('❌ Error getting document context:', error);
+    return null;
+  }
 }

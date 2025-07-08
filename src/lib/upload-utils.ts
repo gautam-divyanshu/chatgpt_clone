@@ -65,3 +65,58 @@ export function isDocumentFile(type: string): boolean {
   ];
   return documentTypes.includes(type);
 }
+
+/**
+ * Downloads a file from a URL with proper filename
+ * Handles both direct downloads and blob creation for CORS issues
+ */
+export async function downloadFile(url: string, filename: string): Promise<void> {
+  try {
+    // Create a temporary anchor element to trigger download
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.target = '_blank';
+    
+    // For files hosted on Cloudinary or other CDNs, we might need to fetch and create blob
+    if (url.includes('cloudinary.com') || url.includes('googleapis.com')) {
+      try {
+        const response = await fetch(url, {
+          mode: 'cors',
+          credentials: 'omit'
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        link.href = blobUrl;
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Clean up the blob URL after a short delay
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+        
+      } catch (fetchError) {
+        console.warn('Failed to fetch file via blob, trying direct download:', fetchError);
+        // Fallback to direct link
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } else {
+      // Direct download for other URLs
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  } catch (error) {
+    console.error('Download failed:', error);
+    // Ultimate fallback: open in new tab
+    window.open(url, '_blank');
+  }
+}

@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 import { ChatInput } from "./ChatInput";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { MessageList } from "./MessageList";
 import { SharePopover } from "./SharePopover";
 import { useChatLogic } from "./useChatLogic";
-import { UserAvatar } from "@/components/auth/UserAvatar";
+import { ShareHeader } from "./ShareHeader";
 
 interface ChatGPTMainProps {
   conversationId?: string | null;
@@ -18,11 +17,6 @@ export function ChatGPTMain({
   conversationId,
   onConversationCreated,
 }: ChatGPTMainProps) {
-  const pathname = usePathname();
-  const [showSharePopover, setShowSharePopover] = useState(false);
-
-  // Check if we're on a conversation route (not home route)
-  const isConversationRoute = pathname.startsWith("/c/");
 
   const {
     messages,
@@ -66,16 +60,6 @@ export function ChatGPTMain({
     handleSendMessage(prompt);
   };
 
-  const handleShareClick = () => {
-    if (isConversationRoute && currentConversationId) {
-      setShowSharePopover(true);
-    }
-  };
-
-  const handleCloseShare = () => {
-    setShowSharePopover(false);
-  };
-
   // Show loading state when switching conversations
   if (isLoadingConversation) {
     return (
@@ -98,38 +82,7 @@ export function ChatGPTMain({
               />
             </svg>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleShareClick}
-              disabled={!isConversationRoute}
-              className={`p-2 rounded-lg transition-all ${
-                isConversationRoute
-                  ? "chatgpt-hover"
-                  : "opacity-50 cursor-not-allowed"
-              }`}
-              title={
-                isConversationRoute
-                  ? "Share conversation"
-                  : "Share not available"
-              }
-            >
-              <svg
-                className="w-5 h-5 chatgpt-text"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                />
-              </svg>
-            </button>
-
-            <UserAvatar />
-          </div>
+          <ShareHeader conversationId={currentConversationId} />
         </div>
 
         {/* Loading State */}
@@ -163,37 +116,7 @@ export function ChatGPTMain({
             />
           </svg>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleShareClick}
-            disabled={!isConversationRoute}
-            className={`flex items-center gap-2 p-2 rounded-lg transition-all mr-5 ${
-              isConversationRoute
-                ? "chatgpt-hover"
-                : "opacity-50 cursor-not-allowed"
-            }`}
-            title={
-              isConversationRoute ? "Share conversation" : "Share not available"
-            }
-          >
-            <svg
-              className="w-5 h-5 chatgpt-text"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-              />
-            </svg>
-            <span>Share</span>
-          </button>
-
-          <UserAvatar />
-        </div>
+        <ShareHeader conversationId={currentConversationId} />
       </div>
 
       {/* Content Area */}
@@ -224,11 +147,11 @@ export function ChatGPTMain({
         />
       </div>
 
-      {/* Share Popover */}
+      {/* Share Popover (legacy, still needed for mobile maybe) */}
       {currentConversationId && (
         <SharePopover
-          isOpen={showSharePopover}
-          onClose={handleCloseShare}
+          isOpen={false} // Always closed, since handled by ShareHeader now
+          onClose={() => {}} // no-op
           conversationId={currentConversationId}
         />
       )}

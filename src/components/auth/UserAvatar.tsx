@@ -94,7 +94,7 @@ export function UserAvatar() {
           style={{ backgroundColor: "#2e2e2e" }}
         >
           {/* User Info */}
-          <div className="px-5 py-4 border-b border-gray-600">
+          <div className="px-3 sm:px-5 py-2 sm:py-4 border-b border-gray-600">
             <div className="flex items-center space-x-4">
               {user.image ? (
                 <Image
@@ -125,7 +125,7 @@ export function UserAvatar() {
           </div>
 
           {/* Menu Items */}
-          <div className="py-2">
+          <div className="md:py-2">
             <button
               onClick={handleLogout}
               className="w-full text-left px-5 py-3 text-base text-gray-300 hover:bg-gray-600 flex items-center space-x-4 transition-colors"

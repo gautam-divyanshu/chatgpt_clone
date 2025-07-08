@@ -2,6 +2,7 @@ import { ChatMessage } from "./types";
 import { UploadedFile } from "./upload-types";
 import { CHAT_CONFIG, API_CONFIG } from "@/config";
 import { generateUserId, generateConversationId } from "@/lib/utils";
+import { defaultContextManager } from "@/lib/context/contextManager";
 
 interface StreamConfig {
   retryAttempts?: number;
@@ -145,53 +146,41 @@ function prepareConversationContext(
   content: string;
   attachments?: UploadedFile[];
 }> {
-  const maxContextTokens = CHAT_CONFIG.MAX_CONTEXT_TOKENS;
-  const estimatedTokensPerChar = CHAT_CONFIG.TOKENS_PER_CHAR;
+  // Use enhanced context manager for better token management
+  const { messages, stats } = defaultContextManager.prepareContext(
+    conversationHistory,
+    currentPrompt
+  );
 
-  let totalTokens = currentPrompt.length * estimatedTokensPerChar;
-  const contextMessages: Array<{
+  console.log('📊 Context Stats:', {
+    totalTokens: stats.totalTokens,
+    messagesIncluded: stats.messagesIncluded,
+    messagesExcluded: stats.messagesExcluded,
+    utilization: `${((stats.totalTokens / defaultContextManager.getConfig().maxTokens) * 100).toFixed(1)}%`,
+    hasReachedLimit: stats.hasReachedLimit
+  });
+
+  // Transform prepared messages to API format
+  const apiMessages: Array<{
     role: "user" | "assistant";
     content: string;
     attachments?: UploadedFile[];
   }> = [];
 
-  const reversedHistory = [...conversationHistory]
-    .filter((msg) => !msg.isStreaming && msg.content.trim())
-    .reverse();
-
-  for (const msg of reversedHistory) {
-    const messageTokens = msg.content.length * estimatedTokensPerChar;
-
-    if (totalTokens + messageTokens > maxContextTokens) {
-      break;
+  for (const msg of messages) {
+    if (msg.role === 'system') {
+      // Skip system messages in this format (handled by chat API)
+      continue;
     }
-
-    const contextMessage: {
-      role: "user" | "assistant";
-      content: string;
-      attachments?: UploadedFile[];
-    } = {
-      role: msg.isUser ? "user" : "assistant",
+    
+    apiMessages.push({
+      role: msg.role,
       content: msg.content,
-    };
-
-    if (msg.isUser && msg.attachments && msg.attachments.length > 0) {
-      contextMessage.attachments = msg.attachments;
-    }
-
-    contextMessages.unshift(contextMessage);
-    totalTokens += messageTokens;
-  }
-
-  const lastMessage = conversationHistory[conversationHistory.length - 1];
-  if (!lastMessage || lastMessage.content !== currentPrompt) {
-    contextMessages.push({
-      role: "user",
-      content: currentPrompt,
+      attachments: msg.attachments,
     });
   }
 
-  return contextMessages;
+  return apiMessages;
 }
 
 async function processStream(

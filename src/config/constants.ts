@@ -6,13 +6,18 @@ export const API_CONFIG = {
 } as const;
 
 export const CHAT_CONFIG = {
-  MAX_CONTEXT_TOKENS: 4000, // Reduced for faster processing
+  MAX_CONTEXT_TOKENS: 1000000, // Updated for Gemini 1.5 Flash (1M tokens)
   TOKENS_PER_CHAR: 0.25,
   DEFAULT_RETRY_ATTEMPTS: 2, // Reduced retries for speed
   DEFAULT_RETRY_DELAY: 500, // Faster retry
   DEFAULT_TIMEOUT: 20000, // Reduced timeout
   AUTO_SAVE_DELAY: 500, // Faster auto-save
   UPDATE_THROTTLE: 8, // ~120fps for smoother streaming
+  
+  // Context window settings
+  CONTEXT_WARNING_THRESHOLD: 0.8, // Show warning at 80% utilization
+  CONTEXT_CRITICAL_THRESHOLD: 0.95, // Critical at 95% utilization
+  MIN_MESSAGES_INCLUDED: 4, // Always include at least 4 messages
 } as const;
 
 export const UPLOAD_CONFIG = {

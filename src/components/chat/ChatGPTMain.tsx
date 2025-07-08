@@ -8,6 +8,7 @@ import { MessageList } from "./MessageList";
 import { SharePopover } from "./SharePopover";
 import { useChatLogic } from "./useChatLogic";
 import { UserAvatar } from "@/components/auth/UserAvatar";
+import { CompactContextIndicator } from "./ContextWindowIndicator";
 
 interface ChatGPTMainProps {
   conversationId?: string | null;
@@ -97,6 +98,10 @@ export function ChatGPTMain({
                 d="M19 9l-7 7-7-7"
               />
             </svg>
+            {/* Context Window Indicator */}
+            {messages.length > 0 && (
+              <CompactContextIndicator messages={messages} modelName="gemini-1.5-flash" />
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -162,6 +167,10 @@ export function ChatGPTMain({
               d="M19 9l-7 7-7-7"
             />
           </svg>
+          {/* Context Window Indicator */}
+          {messages.length > 0 && (
+            <CompactContextIndicator messages={messages} modelName="gemini-1.5-flash" />
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button

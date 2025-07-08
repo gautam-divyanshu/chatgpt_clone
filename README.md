@@ -29,11 +29,18 @@ A pixel-perfect ChatGPT clone built with Next.js 15, featuring real-time chat, m
 - **Cloudinary Integration**: Optimized file storage and delivery
 - **File Type Validation**: Secure file type checking and size limits
 
+### 🔐 **Authentication & Security**
+- **NextAuth.js**: Secure authentication system
+- **Google OAuth**: Sign in with Google account
+- **Session Management**: Secure session handling and user persistence
+- **Protected Routes**: Secure API endpoints and user data
+
 ### ⚡ **Performance & Scalability**
 - **Vercel AI SDK**: Optimized AI response handling
 - **MongoDB Atlas**: Scalable conversation storage
 - **Next.js 15**: Latest framework features with Turbo mode
 - **Edge Runtime**: Fast response times with edge computing
+- **Google Cloud Document AI**: Advanced document processing
 
 ## 🛠️ Tech Stack
 
@@ -41,7 +48,9 @@ A pixel-perfect ChatGPT clone built with Next.js 15, featuring real-time chat, m
 - **Backend**: Next.js API Routes, MongoDB, Mongoose
 - **AI Integration**: Vercel AI SDK, Google Generative AI
 - **Memory**: Mem0 AI for conversation memory
+- **Authentication**: NextAuth.js with Google OAuth
 - **File Storage**: Cloudinary
+- **Document Processing**: Google Cloud Document AI
 - **Styling**: Tailwind CSS with custom ChatGPT theme
 - **Deployment**: Vercel
 
@@ -89,6 +98,20 @@ A pixel-perfect ChatGPT clone built with Next.js 15, featuring real-time chat, m
    # Mem0 AI Configuration (for memory)
    MEM0_API_KEY=your_mem0_api_key
    MEM0_BASE_URL=https://api.mem0.ai
+
+   # NextAuth Configuration
+   NEXTAUTH_SECRET=your_nextauth_secret
+   NEXTAUTH_URL=http://localhost:3000
+
+   # Google OAuth (for Google login)
+   GOOGLE_CLIENT_ID=your_google_client_id
+   GOOGLE_CLIENT_SECRET=your_google_client_secret
+
+   # Google Cloud Configuration (for document processing)
+   GOOGLE_CLOUD_PROJECT_ID=your_project_id
+   GOOGLE_APPLICATION_CREDENTIALS=your_service_account_json
+   GOOGLE_CLOUD_PROCESSOR_ID=your_processor_id
+   GOOGLE_CLOUD_LOCATION=us
    ```
 
 4. **Run the development server**
@@ -112,6 +135,14 @@ A pixel-perfect ChatGPT clone built with Next.js 15, featuring real-time chat, m
 | `CLOUDINARY_API_SECRET` | Cloudinary API secret | ✅ |
 | `MEM0_API_KEY` | Mem0 AI API key for memory features | ✅ |
 | `MEM0_BASE_URL` | Mem0 AI base URL | ✅ |
+| `NEXTAUTH_SECRET` | NextAuth secret for session encryption | ✅ |
+| `NEXTAUTH_URL` | NextAuth URL for authentication callbacks | ✅ |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID for Google login | ✅ |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | ✅ |
+| `GOOGLE_CLOUD_PROJECT_ID` | Google Cloud project ID for document processing | ✅ |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Google Cloud service account JSON | ✅ |
+| `GOOGLE_CLOUD_PROCESSOR_ID` | Google Cloud Document AI processor ID | ✅ |
+| `GOOGLE_CLOUD_LOCATION` | Google Cloud location (default: us) | ✅ |
 
 ### Getting API Keys
 
@@ -132,6 +163,24 @@ A pixel-perfect ChatGPT clone built with Next.js 15, featuring real-time chat, m
 4. **Mem0 AI**:
    - Register at [Mem0.ai](https://mem0.ai/)
    - Get API key from your dashboard
+
+5. **NextAuth Configuration**:
+   - Generate a secure secret: `openssl rand -base64 32`
+   - Set NEXTAUTH_URL to your domain (http://localhost:3000 for development)
+
+6. **Google OAuth**:
+   - Visit [Google Cloud Console](https://console.cloud.google.com/)
+   - Create a new project or select existing
+   - Enable Google+ API
+   - Create OAuth 2.0 credentials
+   - Add authorized redirect URIs: `http://localhost:3000/api/auth/callback/google`
+
+7. **Google Cloud Document AI**:
+   - Visit [Google Cloud Console](https://console.cloud.google.com/)
+   - Enable Document AI API
+   - Create a service account and download JSON key
+   - Create a Document AI processor
+   - Note the processor ID and location
 
 
 ## 🗂️ Project Structure

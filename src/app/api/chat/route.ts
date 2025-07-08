@@ -34,26 +34,50 @@ export async function POST(req: Request) {
 
     // Get relevant memories for context (optimized for speed)
     let memoryContext = "";
-    let memoryPromise: Promise<void> | null = null;
     
     if (mem0Service.isAvailable() && currentUserMessage) {
-      // Run memory retrieval in parallel with message processing
-      memoryPromise = (async () => {
-        try {
-          const relevantMemories = await mem0Service.getRelevantMemories(
+      try {
+        // Determine if this is a personal information query for higher limit
+        const isPersonalQuery = currentUserMessage.toLowerCase().includes('what do you know about me') ||
+                               currentUserMessage.toLowerCase().includes('tell me about') ||
+                               currentUserMessage.toLowerCase().includes('remember about me') ||
+                               currentUserMessage.toLowerCase().includes('my information') ||
+                               currentUserMessage.toLowerCase().includes('my preferences');
+        
+        const memoryLimit = isPersonalQuery ? 10 : 3; // More memories for personal queries
+        
+        // Add timeout to prevent hanging
+        const memoryPromise = Promise.race([
+          mem0Service.getRelevantMemories(
             currentUserMessage,
             finalUserId,
             finalConversationId,
-            3 // Reduced from 5 to 3 for speed
-          );
+            memoryLimit
+          ),
+          new Promise<string[]>((_, reject) => 
+            setTimeout(() => reject(new Error('Memory timeout')), 3000)
+          )
+        ]);
+        
+        const relevantMemories = await memoryPromise;
 
-          if (relevantMemories.length > 0) {
-            memoryContext = `\nContext: ${relevantMemories.join('; ')}\nRespond naturally using this context.\n\n`;
+        console.log(`🧠 Memory retrieval for "${currentUserMessage}":`, {
+          userId: finalUserId,
+          isPersonalQuery,
+          memoriesFound: relevantMemories.length,
+          memories: relevantMemories
+        });
+
+        if (relevantMemories.length > 0) {
+          if (isPersonalQuery) {
+            memoryContext = `\n**MEMORY CONTEXT - Personal Information About This User:**\n${relevantMemories.map(memory => `• ${memory}`).join('\n')}\n\nUse this information to answer their question about what you know about them.\n\n`;
+          } else {
+            memoryContext = `\n**RELEVANT CONTEXT:** ${relevantMemories.join('; ')}\nUse this context naturally in your response.\n\n`;
           }
-        } catch (error) {
-          console.warn("Failed to retrieve memories:", error);
         }
-      })();
+      } catch (error) {
+        console.warn("⚠️ Failed to retrieve memories (proceeding without):", error);
+      }
     }
 
     const processedMessages = await processMessagesWithAttachments(
@@ -63,54 +87,42 @@ export async function POST(req: Request) {
       finalUserId
     );
 
-    // Wait for memory retrieval to complete if it's running
-    if (memoryPromise) {
-      await memoryPromise;
-      // Re-process messages with memory context if it was retrieved
-      if (memoryContext) {
-        const lastMessage = processedMessages[processedMessages.length - 1];
-        if (lastMessage && lastMessage.role === 'user') {
-          if (typeof lastMessage.content === 'string') {
-            lastMessage.content = memoryContext + lastMessage.content;
-          } else if (Array.isArray(lastMessage.content)) {
-            const textContent = lastMessage.content.find(c => c.type === 'text');
-            if (textContent) {
-              textContent.text = memoryContext + textContent.text;
-            }
-          }
-        }
-      }
-    }
-
     const result = await streamText({
       model: google("gemini-1.5-flash"),
       messages: processedMessages,
       temperature: 0.8, // Slightly higher for faster generation
       maxTokens: 2048, // Reduced for faster responses
       topP: 0.9, // Optimized for speed
+      system: `You are Claude, an AI assistant with memory capabilities. You can remember information from previous conversations with users and use this context to provide personalized responses. When users ask what you know about them or request personal information, provide helpful summaries based on your memory. You should acknowledge your memory capabilities when relevant and use remembered information naturally in conversations.`,
       // Removed frequency/presence penalties for speed
-      onFinish: async (finishResult) => {
+      onFinish: (finishResult) => {
+        // Store memory asynchronously without blocking the response
         if (mem0Service.isAvailable()) {
-          try {
-            const conversationMessages: { role: 'user' | 'assistant', content: string }[] = [
-              { role: "user", content: currentUserMessage },
-              { role: "assistant", content: finishResult.text },
-            ];
+          // Run memory storage in the background (fire and forget)
+          Promise.resolve().then(async () => {
+            try {
+              const conversationMessages: { role: 'user' | 'assistant', content: string }[] = [
+                { role: "user", content: currentUserMessage },
+                { role: "assistant", content: finishResult.text },
+              ];
 
-            await mem0Service.addMemory(
-              conversationMessages,
-              finalUserId,
-              finalConversationId,
-              {
-                timestamp: new Date().toISOString(),
-                category: "context",
-                importance: "medium",
-                messageId: generateMessageId(),
-              }
-            );
-          } catch (error) {
-            console.warn("Failed to store conversation in memory:", error);
-          }
+              await mem0Service.addMemory(
+                conversationMessages,
+                finalUserId,
+                finalConversationId,
+                {
+                  timestamp: new Date().toISOString(),
+                  category: "context",
+                  importance: "medium",
+                  messageId: generateMessageId(),
+                }
+              );
+              
+              console.log('💾 Memory stored successfully in background');
+            } catch (error) {
+              console.warn("⚠️ Failed to store conversation in memory (background):", error);
+            }
+          });
         }
       },
     });

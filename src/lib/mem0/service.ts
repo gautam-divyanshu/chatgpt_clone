@@ -9,7 +9,8 @@ export class Mem0Service {
     try {
       this.client = createMem0Client();
       if (!this.client) {
-        this.initError = "Failed to create Mem0 client - check API key and package installation";
+        this.initError =
+          "Failed to create Mem0 client - check API key and package installation";
       }
     } catch (error) {
       this.initError = `Mem0 initialization error: ${
@@ -27,6 +28,9 @@ export class Mem0Service {
     return this.initError;
   }
 
+  /**
+   * Enhanced memory addition with v2 contextual features
+   */
   async addMemory(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     message: string | any[],
@@ -49,22 +53,43 @@ export class Mem0Service {
         messages = message;
       }
 
-      // Use only userId for global memory (no conversation_id)
+      // Determine memory scope based on content analysis
+      const memoryScope = this.analyzeMemoryScope(messages, metadata);
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const options: any = { user_id: userId };
-      
-      if (metadata) {
+      const options: any = {
+        user_id: userId,
+        version: "v2", // Use v2 for better contextual memory
+      };
+
+      // Use run_id for conversation-specific memories, omit for global memories
+      if (memoryScope.scope === "conversation" && conversationId) {
+        options.run_id = conversationId;
+      }
+
+      // Enhanced metadata with memory classification
+      if (metadata || conversationId || memoryScope.category) {
         options.metadata = {
+          timestamp: new Date().toISOString(),
+          category: memoryScope.category,
+          scope: memoryScope.scope,
+          importance: memoryScope.importance,
           ...metadata,
-          timestamp: new Date().toISOString(),
-          // Store conversation_id in metadata for reference but don't use for filtering
-          source_conversation_id: conversationId,
+          ...(conversationId && { source_conversation_id: conversationId }),
         };
-      } else if (conversationId) {
-        options.metadata = {
-          timestamp: new Date().toISOString(),
-          source_conversation_id: conversationId,
-        };
+      }
+
+      // Add memory customization for better relevance
+      if (memoryScope.scope === "conversation") {
+        options.includes =
+          "conversation context, current topic discussion, immediate references";
+        options.excludes =
+          "unrelated personal preferences, general facts not relevant to current topic";
+      } else {
+        options.includes =
+          "important personal preferences, facts about the user, long-term information";
+        options.excludes =
+          "temporary conversation context, topic-specific details";
       }
 
       const response = await this.client.add(messages, options);
@@ -81,57 +106,366 @@ export class Mem0Service {
     }
   }
 
-  // Search memories for a user within a specific conversation only
-  async searchConversationMemories(
-    query: string,
+  /**
+   * Analyze memory content to determine appropriate scope and classification
+   */
+  private analyzeMemoryScope(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    messages: any[],
+    metadata?: ChatMemory["metadata"]
+  ): {
+    scope: "global" | "conversation";
+    category: string;
+    importance: "high" | "medium" | "low";
+  } {
+    const content = messages
+      .map((m) => m.content)
+      .join(" ")
+      .toLowerCase();
+
+    // Keywords that suggest global/persistent memory
+    const globalKeywords = [
+      "i am",
+      "my name is",
+      "i like",
+      "i love",
+      "i hate",
+      "i prefer",
+      "i always",
+      "i never",
+      "my favorite",
+      "allergic to",
+      "vegetarian",
+      "i work at",
+      "i live in",
+      "my job",
+      "my profession",
+      "my family",
+      "i was born",
+      "my birthday",
+      "my age",
+    ];
+
+    // Keywords that suggest conversation-specific memory
+    const conversationKeywords = [
+      "right now",
+      "currently",
+      "today",
+      "this",
+      "here",
+      "that",
+      "screenshot",
+      "image",
+      "document",
+      "file",
+      "upload",
+      "show me",
+      "look at",
+      "analyze",
+      "explain this",
+    ];
+
+    const hasGlobalKeywords = globalKeywords.some((keyword) =>
+      content.includes(keyword)
+    );
+    const hasConversationKeywords = conversationKeywords.some((keyword) =>
+      content.includes(keyword)
+    );
+
+    // Default to conversation scope for context-specific interactions
+    let scope: "global" | "conversation" = "conversation";
+    let category = "context";
+    let importance: "high" | "medium" | "low" = "medium";
+
+    if (hasGlobalKeywords && !hasConversationKeywords) {
+      scope = "global";
+      category = "preference";
+      importance = "high";
+    } else if (hasGlobalKeywords && hasConversationKeywords) {
+      // Mixed content - prefer global for important personal info
+      scope = "global";
+      category = "fact";
+      importance = "medium";
+    }
+
+    // Override with explicit metadata if provided
+    if (metadata?.category) {
+      category = metadata.category;
+      if (metadata.category === "preference" || metadata.category === "fact") {
+        scope = "global";
+        importance = "high";
+      }
+    }
+
+    return { scope, category, importance };
+  }
+
+  /**
+   * Smart memory retrieval that considers conversation context and relevance
+   */
+  async getRelevantMemories(
+    currentMessage: string,
     userId: string,
     conversationId: string,
-    limit: number = 10
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): Promise<{ success: boolean; memories?: any[]; error?: string }> {
+    limit: number = 5
+  ): Promise<string[]> {
     if (!this.client) {
-      return {
-        success: false,
-        error: this.initError || "Mem0 client not available",
-      };
+      return [];
     }
 
     try {
-      // First get conversation memories, then filter by search query locally
-      const conversationResult = await this.getConversationMemories(
-        conversationId,
-        userId,
-        limit * 2 // Get more to filter locally
-      );
+      // Analyze current message to determine what type of memories to retrieve
+      const messageContext = this.analyzeMessageContext(currentMessage);
 
-      if (!conversationResult.success || !conversationResult.memories) {
-        return { success: true, memories: [] };
+      const relevantMemories: string[] = [];
+
+      // Special handling for direct personal information queries
+      if (this.isDirectPersonalQuery(currentMessage)) {
+        console.log(
+          "🔍 Direct personal query detected - retrieving all user memories"
+        );
+        const allUserMemories = await this.getUserMemories(userId, limit * 2);
+
+        if (allUserMemories.success && allUserMemories.memories) {
+          return allUserMemories.memories
+            .map((memory) => memory.text || memory.memory || memory.content)
+            .filter(Boolean)
+            .slice(0, limit);
+        }
       }
 
-      // Filter memories that match the query
-      const filteredMemories = conversationResult.memories.filter(memory => {
-        const content = memory.text || memory.memory || memory.content || '';
-        return content.toLowerCase().includes(query.toLowerCase());
-      }).slice(0, limit);
+      // Strategy 1: Get conversation-specific memories first (if contextually relevant)
+      if (messageContext.needsConversationContext) {
+        const conversationMemories = await this.getConversationMemories(
+          conversationId,
+          userId,
+          Math.min(3, limit)
+        );
 
-      return {
-        success: true,
-        memories: filteredMemories,
-      };
+        if (conversationMemories.success && conversationMemories.memories) {
+          const contextMemories = conversationMemories.memories
+            .map((memory) => memory.text || memory.memory || memory.content)
+            .filter(Boolean)
+            .slice(0, 2); // Limit conversation context
+
+          relevantMemories.push(...contextMemories);
+        }
+      }
+
+      // Strategy 2: Get global memories only if truly relevant
+      if (
+        messageContext.needsGlobalMemories &&
+        relevantMemories.length < limit
+      ) {
+        const remainingLimit = limit - relevantMemories.length;
+        const globalSearchResult = await this.searchMemories(
+          currentMessage,
+          userId,
+          remainingLimit,
+          {
+            keyword_search: true, // Enable keyword search for better matching
+            filter_memories: true, // Filter for higher precision
+            rerank: true, // Rerank for better relevance
+          }
+        );
+
+        if (globalSearchResult.success && globalSearchResult.memories) {
+          const globalMemories = globalSearchResult.memories
+            .map((memory) => memory.text || memory.memory || memory.content)
+            .filter(Boolean)
+            .filter((memory) => this.isMemoryRelevant(memory, currentMessage))
+            .slice(0, remainingLimit);
+
+          relevantMemories.push(...globalMemories);
+        }
+      }
+
+      console.log(
+        `Retrieved ${relevantMemories.length} contextually relevant memories for user ${userId}`
+      );
+      console.log("Memory context analysis:", messageContext);
+
+      return relevantMemories;
     } catch (error) {
-      console.error('Error searching conversation memories:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
+      console.error("Error getting relevant memories:", error);
+      return [];
     }
   }
 
+  /**
+   * Analyze message to determine what type of context is needed
+   */
+  private analyzeMessageContext(message: string): {
+    needsConversationContext: boolean;
+    needsGlobalMemories: boolean;
+    contextType: "reference" | "personal" | "general" | "technical";
+  } {
+    const lowerMessage = message.toLowerCase();
+
+    // Indicators that conversation context is needed
+    const conversationIndicators = [
+      "this",
+      "that",
+      "it",
+      "here",
+      "there",
+      "above",
+      "below",
+      "screenshot",
+      "image",
+      "document",
+      "file",
+      "what you see",
+      "analyze",
+      "explain this",
+      "about this",
+      "regarding this",
+    ];
+
+    // Indicators that global memories might be relevant
+    const personalIndicators = [
+      "i like",
+      "i prefer",
+      "my favorite",
+      "recommend",
+      "suggest",
+      "what should i",
+      "help me",
+      "my",
+      "for me",
+      "about me",
+      "what do you know about me",
+      "tell me about myself",
+      "what do you remember",
+      "what have i told you",
+      "my information",
+      "my details",
+      "my preferences",
+      "remind me",
+      "what did i say",
+      "personal information",
+    ];
+
+    // Technical/general questions that don't need personal context
+    const technicalIndicators = [
+      "how to",
+      "what is",
+      "explain",
+      "define",
+      "difference between",
+      "why does",
+      "when should",
+      "where can",
+      "which is better",
+    ];
+
+    const needsConversationContext = conversationIndicators.some((indicator) =>
+      lowerMessage.includes(indicator)
+    );
+
+    const needsGlobalMemories =
+      personalIndicators.some((indicator) =>
+        lowerMessage.includes(indicator)
+      ) &&
+      !technicalIndicators.some((indicator) =>
+        lowerMessage.includes(indicator)
+      );
+
+    let contextType: "reference" | "personal" | "general" | "technical" =
+      "general";
+
+    if (needsConversationContext) {
+      contextType = "reference";
+    } else if (needsGlobalMemories) {
+      contextType = "personal";
+    } else if (
+      technicalIndicators.some((indicator) => lowerMessage.includes(indicator))
+    ) {
+      contextType = "technical";
+    }
+
+    return {
+      needsConversationContext,
+      needsGlobalMemories,
+      contextType,
+    };
+  }
+
+  /**
+   * Check if this is a direct personal information query
+   */
+  private isDirectPersonalQuery(message: string): boolean {
+    const lowerMessage = message.toLowerCase();
+
+    const directPersonalQueries = [
+      "what do you know about me",
+      "tell me about myself",
+      "what do you remember about me",
+      "what have i told you",
+      "what information do you have",
+      "my information",
+      "my details",
+      "what are my preferences",
+      "remind me about myself",
+      "what did i tell you about me",
+      "personal information",
+      "about me",
+    ];
+
+    return directPersonalQueries.some(
+      (query) =>
+        lowerMessage.includes(query) ||
+        (lowerMessage.includes("what") &&
+          lowerMessage.includes("know") &&
+          lowerMessage.includes("me")) ||
+        (lowerMessage.includes("tell") &&
+          lowerMessage.includes("about") &&
+          lowerMessage.includes("me")) ||
+        (lowerMessage.includes("remember") && lowerMessage.includes("me"))
+    );
+  }
+
+  /**
+   * Check if a memory is actually relevant to the current message
+   */
+  private isMemoryRelevant(memory: string, currentMessage: string): boolean {
+    const memoryLower = memory.toLowerCase();
+    const messageLower = currentMessage.toLowerCase();
+
+    // Check for keyword overlap
+    const messageWords = messageLower
+      .split(/\s+/)
+      .filter((word) => word.length > 3);
+    const memoryWords = memoryLower.split(/\s+/);
+
+    const overlap = messageWords.filter((word) =>
+      memoryWords.some(
+        (memWord) => memWord.includes(word) || word.includes(memWord)
+      )
+    );
+
+    // Require significant overlap for relevance
+    const relevanceThreshold = Math.max(
+      1,
+      Math.floor(messageWords.length * 0.2)
+    );
+
+    return overlap.length >= relevanceThreshold;
+  }
+
+  /**
+   * Enhanced search with advanced retrieval options
+   */
   async searchMemories(
     query: string,
     userId: string,
-    limit: number = 10
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    limit: number = 10,
+    options: {
+      keyword_search?: boolean;
+      rerank?: boolean;
+      filter_memories?: boolean;
+    } = {}
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<{ success: boolean; memories?: any[]; error?: string }> {
     if (!this.client) {
       return {
@@ -141,8 +475,13 @@ export class Mem0Service {
     }
 
     try {
-      const options = { user_id: userId, limit };
-      const response = await this.client.search(query, options);
+      const searchOptions = {
+        user_id: userId,
+        limit,
+        ...options,
+      };
+
+      const response = await this.client.search(query, searchOptions);
 
       return {
         success: true,
@@ -156,39 +495,14 @@ export class Mem0Service {
     }
   }
 
-  async getUserMemories(
-    userId: string,
-    limit: number = 50
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): Promise<{ success: boolean; memories?: any[]; error?: string }> {
-    if (!this.client) {
-      return {
-        success: false,
-        error: this.initError || "Mem0 client not available",
-      };
-    }
-
-    try {
-      const options = { user_id: userId, limit };
-      const response = await this.client.getAll(options);
-
-      return {
-        success: true,
-        memories: response.results || response || [],
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
-    }
-  }
-
+  /**
+   * Get memories specific to a conversation
+   */
   async getConversationMemories(
     conversationId: string,
     userId: string,
     limit: number = 20
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<{ success: boolean; memories?: any[]; error?: string }> {
     if (!this.client) {
       return {
@@ -200,7 +514,7 @@ export class Mem0Service {
     try {
       const options = {
         user_id: userId,
-        conversation_id: conversationId,
+        run_id: conversationId, // Use run_id for v2 API
         limit,
       };
       const response = await this.client.getAll(options);
@@ -217,7 +531,43 @@ export class Mem0Service {
     }
   }
 
-  async deleteMemory(memoryId: string): Promise<{ success: boolean; error?: string }> {
+  /**
+   * Get all user memories (global scope)
+   */
+  async getUserMemories(
+    userId: string,
+    limit: number = 50
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): Promise<{ success: boolean; memories?: any[]; error?: string }> {
+    if (!this.client) {
+      return {
+        success: false,
+        error: this.initError || "Mem0 client not available",
+      };
+    }
+
+    try {
+      const options = { user_id: userId, limit };
+      const response = await this.client.getAll(options);
+
+      return {
+        success: true,
+        memories: response.results || response || [],
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  /**
+   * Delete a specific memory
+   */
+  async deleteMemory(
+    memoryId: string
+  ): Promise<{ success: boolean; error?: string }> {
     if (!this.client) {
       return {
         success: false,
@@ -236,88 +586,24 @@ export class Mem0Service {
     }
   }
 
-  async getRelevantMemories(
-    currentMessage: string,
-    userId: string,
-    conversationId: string,
-    limit: number = 5
-  ): Promise<string[]> {
-    if (!this.client) {
-      return [];
-    }
-
-    try {
-      // Use global memory search across all conversations
-      const searchResult = await this.searchMemories(currentMessage, userId, limit);
-
-      if (!searchResult.success || !searchResult.memories) {
-        // Fallback to getting all user memories if search fails
-        const allMemoriesResult = await this.getUserMemories(userId, limit);
-        if (allMemoriesResult.success && allMemoriesResult.memories) {
-          return allMemoriesResult.memories
-            .slice(0, limit)
-            .map((memory) => memory.text || memory.memory || memory.content)
-            .filter(Boolean);
-        }
-        return [];
-      }
-
-      // Extract and return memory content from search results
-      const relevantMemories = searchResult.memories
-        .slice(0, limit)
-        .map((memory) => memory.text || memory.memory || memory.content)
-        .filter(Boolean);
-
-      console.log(`Retrieved ${relevantMemories.length} global memories for user ${userId}`);
-      return relevantMemories;
-    } catch (error) {
-      console.error('Error getting relevant memories:', error);
-      return [];
-    }
-  }
-
-  // Optional: Method to get global user memories across conversations
-  // (not used by default to ensure fresh conversations)
+  /**
+   * Legacy method for backward compatibility
+   */
   async getGlobalUserMemories(
     currentMessage: string,
     userId: string,
     conversationId: string,
     limit: number = 5
   ): Promise<string[]> {
-    if (!this.client) {
-      return [];
-    }
-
-    try {
-      const searchResult = await this.searchMemories(currentMessage, userId, limit);
-
-      if (!searchResult.success || !searchResult.memories) {
-        return [];
-      }
-
-      const conversationResult = await this.getConversationMemories(
-        conversationId,
-        userId,
-        Math.max(3, limit - searchResult.memories.length)
-      );
-
-      const allMemories = [
-        ...(searchResult.memories || []),
-        ...(conversationResult.memories || []),
-      ];
-
-      const uniqueMemories = Array.from(
-        new Map(allMemories.map((m) => [m.id, m])).values()
-      );
-
-      return uniqueMemories
-        .slice(0, limit)
-        .map((memory) => memory.text || memory.memory || memory.content)
-        .filter(Boolean);
-    } catch (error) {
-      console.error('Error getting global user memories:', error);
-      return [];
-    }
+    console.warn(
+      "getGlobalUserMemories is deprecated. Use getRelevantMemories instead."
+    );
+    return this.getRelevantMemories(
+      currentMessage,
+      userId,
+      conversationId,
+      limit
+    );
   }
 }
 

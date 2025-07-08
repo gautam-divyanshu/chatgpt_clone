@@ -118,4 +118,9 @@ export const authConfig: NextAuthConfig = {
   },
 
   secret: process.env.NEXTAUTH_SECRET,
+  
+  // This will automatically use VERCEL_URL in production
+  ...(process.env.VERCEL_URL && {
+    url: `https://${process.env.VERCEL_URL}`,
+  }),
 };

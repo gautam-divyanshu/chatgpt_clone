@@ -11,7 +11,7 @@ import { useState, useCallback, useEffect } from "react";
 export default function Home() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
 
   // Redirect to sign-in if not authenticated

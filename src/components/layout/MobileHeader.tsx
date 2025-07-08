@@ -1,9 +1,13 @@
 "use client";
+
+import { ShareHeader } from "../chat/ShareHeader";
+
 interface MobileHeaderProps {
   onMenuClick: () => void;
+  conversationId?: string | null; // Add this prop to pass conversationId if needed
 }
 
-export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
+export function MobileHeader({ onMenuClick, conversationId }: MobileHeaderProps) {
   return (
     <div className="md:hidden border-b border-white/10 p-4 flex items-center justify-between">
       {/* Menu Button - Now matches the main sidebar toggle styling */}
@@ -31,22 +35,9 @@ export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
         ChatGPT
       </h1>
 
-      {/* Options Button - Also using consistent styling */}
-      <button className="p-2 rounded-lg chatgpt-hover transition-all duration-300 ease-in-out">
-        <svg
-          className="w-5 h-5 chatgpt-text"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
-          />
-        </svg>
-      </button>
+      <div className="flex gap-2">
+        <ShareHeader conversationId={conversationId} />
+      </div>
     </div>
   );
 }

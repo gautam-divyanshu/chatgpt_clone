@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   ChatGPTIcon,
   NewChatIcon,
@@ -22,6 +23,7 @@ interface SidebarProps {
   currentConversationId?: string | null;
   onSelectConversation: (conversationId: string) => void;
   onNewChat: () => void;
+  onConversationDeleted?: () => void;
 }
 
 export function Sidebar({
@@ -31,7 +33,9 @@ export function Sidebar({
   currentConversationId,
   onSelectConversation,
   onNewChat,
+  onConversationDeleted,
 }: SidebarProps) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const { conversations, refreshConversations } = useConversations();
   const [showSearchPopover, setShowSearchPopover] = useState(false);
@@ -100,15 +104,18 @@ export function Sidebar({
         if (success) {
           await refreshConversations();
           console.log(`Deleted conversation ${conversationId}`);
+          // If deleting the current conversation, navigate to home
           if (conversationId === currentConversationId) {
-            window.location.href = "/";
+            router.push("/");
+            // Notify parent component that a conversation was deleted
+            onConversationDeleted?.();
           }
         }
       } catch (error) {
         console.error("Failed to delete conversation:", error);
       }
     },
-    [refreshConversations, currentConversationId]
+    [refreshConversations, currentConversationId, router, onConversationDeleted]
   );
 
   // Handle conversation share

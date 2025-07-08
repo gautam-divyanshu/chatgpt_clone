@@ -5,13 +5,14 @@ import { ChatGPTMain } from "@/components/chat/ChatGPTMain";
 import { MobileHeader } from "@/components/layout/MobileHeader";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useState, useCallback, useEffect } from "react";
 
 export default function Home() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const pathname = usePathname();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
 
   // Redirect to sign-in if not authenticated
@@ -21,6 +22,13 @@ export default function Home() {
       router.push("/auth/signin");
     }
   }, [session, status, router]);
+
+  // Reset conversation when navigating to home route
+  useEffect(() => {
+    if (pathname === "/") {
+      setCurrentConversationId(null);
+    }
+  }, [pathname]);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
@@ -34,10 +42,17 @@ export default function Home() {
   // Handle creating new conversation
   const handleNewChat = useCallback(() => {
     setCurrentConversationId(null);
+    // Navigate to home route
+    router.push("/");
     // Close sidebar on mobile after selection
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
     }
+  }, [router]);
+
+  // Handle when a conversation is deleted
+  const handleConversationDeleted = useCallback(() => {
+    setCurrentConversationId(null);
   }, []);
 
   // Handle when a new conversation is created in ChatGPTMain
@@ -76,6 +91,7 @@ export default function Home() {
           currentConversationId={currentConversationId}
           onSelectConversation={handleSelectConversation}
           onNewChat={handleNewChat}
+          onConversationDeleted={handleConversationDeleted}
         />
 
         {/* Main Content */}

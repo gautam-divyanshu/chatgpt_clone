@@ -7,6 +7,7 @@ import { MessageList } from "./MessageList";
 import { SharePopover } from "./SharePopover";
 import { useChatLogic } from "./useChatLogic";
 import { ShareHeader } from "./ShareHeader";
+import { CompactContextIndicator } from "./ContextWindowIndicator";
 
 interface ChatGPTMainProps {
   conversationId?: string | null;
@@ -81,6 +82,10 @@ export function ChatGPTMain({
                 d="M19 9l-7 7-7-7"
               />
             </svg>
+            {/* Context Window Indicator */}
+            {messages.length > 0 && (
+              <CompactContextIndicator messages={messages} modelName="gemini-1.5-flash" />
+            )}
           </div>
           <ShareHeader conversationId={currentConversationId} />
         </div>
@@ -115,6 +120,10 @@ export function ChatGPTMain({
               d="M19 9l-7 7-7-7"
             />
           </svg>
+          {/* Context Window Indicator */}
+          {messages.length > 0 && (
+            <CompactContextIndicator messages={messages} modelName="gemini-1.5-flash" />
+          )}
         </div>
         <ShareHeader conversationId={currentConversationId} />
       </div>

@@ -13,9 +13,11 @@ export default function ConversationPage() {
   const router = useRouter();
   const params = useParams();
   const conversationId = params.id as string;
-  
+
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(conversationId);
+  const [currentConversationId, setCurrentConversationId] = useState<
+    string | null
+  >(conversationId);
 
   // Redirect to sign-in if not authenticated
   useEffect(() => {
@@ -35,19 +37,25 @@ export default function ConversationPage() {
   };
 
   // Handle conversation selection from sidebar
-  const handleSelectConversation = useCallback((newConversationId: string) => {
-    router.push(`/c/${newConversationId}`);
-  }, [router]);
+  const handleSelectConversation = useCallback(
+    (newConversationId: string) => {
+      router.push(`/c/${newConversationId}`);
+    },
+    [router]
+  );
 
   // Handle creating new conversation
   const handleNewChat = useCallback(() => {
-    router.push('/');
+    router.push("/");
   }, [router]);
 
   // Handle when a new conversation is created in ChatGPTMain
-  const handleConversationCreated = useCallback((newConversationId: string) => {
-    router.push(`/c/${newConversationId}`);
-  }, [router]);
+  const handleConversationCreated = useCallback(
+    (newConversationId: string) => {
+      router.push(`/c/${newConversationId}`);
+    },
+    [router]
+  );
 
   // Show loading state while checking authentication
   if (status === "loading") {
@@ -82,10 +90,13 @@ export default function ConversationPage() {
         {/* Main Content */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Mobile Header */}
-          <MobileHeader onMenuClick={() => setSidebarOpen(true)} />
+          <MobileHeader
+            onMenuClick={() => setSidebarOpen(true)}
+            conversationId={currentConversationId}
+          />
 
           {/* Chat Content with Conversation Context */}
-          <ChatGPTMain 
+          <ChatGPTMain
             conversationId={currentConversationId}
             onConversationCreated={handleConversationCreated}
           />

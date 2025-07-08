@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { usePathname } from "next/navigation";
+// import { usePathname } from "next/navigation";
 import { SharePopover } from "./SharePopover";
 import { UserAvatar } from "@/components/auth/UserAvatar";
 
@@ -10,14 +10,10 @@ interface ShareHeaderProps {
 }
 
 export function ShareHeader({ conversationId }: ShareHeaderProps) {
-  const pathname = usePathname();
   const [showSharePopover, setShowSharePopover] = useState(false);
 
-  // Check if we're on a conversation route (not home route)
-  const isConversationRoute = pathname.startsWith("/c/");
-
   const handleShareClick = () => {
-    if (isConversationRoute && conversationId) {
+    if (conversationId) {
       setShowSharePopover(true);
     }
   };
@@ -30,15 +26,11 @@ export function ShareHeader({ conversationId }: ShareHeaderProps) {
     <div className="flex items-center gap-2">
       <button
         onClick={handleShareClick}
-        disabled={!isConversationRoute}
+        disabled={!conversationId}
         className={`flex items-center gap-2 p-2 rounded-lg transition-all mr-5 ${
-          isConversationRoute
-            ? "chatgpt-hover"
-            : "opacity-50 cursor-not-allowed"
+          conversationId ? "chatgpt-hover" : "opacity-50 cursor-not-allowed"
         }`}
-        title={
-          isConversationRoute ? "Share conversation" : "Share not available"
-        }
+        title={conversationId ? "Share conversation" : "Share not available"}
       >
         <svg
           className="w-5 h-5 chatgpt-text"

@@ -80,10 +80,10 @@ export function SharePopover({
 
       {/* Popover */}
       <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50">
-        <div className="bg-[#2f2f2f] rounded-2xl w-[480px] p-6 text-white">
+        <div className="bg-[#2f2f2f] rounded-2xl w-[90vw] sm:w-[70vw] md:w-[528px] p-4 text-white">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-medium text-white">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-medium text-white">
               Share public link to chat
             </h3>
             <button
@@ -91,7 +91,7 @@ export function SharePopover({
               className="p-1 rounded-lg hover:bg-white/10 transition-colors"
             >
               <svg
-                className="w-6 h-6 text-white"
+                className="w-5 h-5 text-white"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -107,7 +107,7 @@ export function SharePopover({
           </div>
 
           {/* Description */}
-          <p className="text-white/80 mb-8 leading-relaxed">
+          <p className="text-white/80 mb-5 leading-relaxed">
             Your name, custom instructions, and any messages you add after
             sharing stay private.{" "}
             <a
@@ -127,22 +127,21 @@ export function SharePopover({
           )}
 
           {/* URL Input and Button */}
-          <div className="flex items-center gap-3">
-            <div className="flex-1 bg-[#404040] rounded-xl px-4 py-4 border border-[#555]">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="flex gap-4 w-full rounded-full pl-4 p-2 border border-[#555]">
               <input
                 type="text"
                 value={shareUrl || "https://chatgpt.com/share/..."}
                 readOnly
-                className={`w-full bg-transparent focus:outline-none text-sm ${
+                className={`w-full bg-transparent focus:outline-none text-lg ${
                   shareUrl ? "text-white" : "text-white/60"
                 }`}
               />
-            </div>
-
+              
             {shareUrl ? (
               <button
                 onClick={handleCopyLink}
-                className={`px-6 py-4 rounded-xl font-medium text-sm transition-all flex items-center gap-2 whitespace-nowrap ${
+                className={`px-6 py-2 sm:py-4 rounded-full font-medium text-sm transition-all flex items-center gap-2 whitespace-nowrap ${
                   isCopied
                     ? "bg-green-600 text-white"
                     : "bg-white text-black hover:bg-gray-100"
@@ -188,7 +187,7 @@ export function SharePopover({
               <button
                 onClick={handleCreateLink}
                 disabled={isCreating}
-                className="px-6 py-4 rounded-xl font-medium text-sm transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap bg-white text-black hover:bg-gray-100"
+                className="px-6 py-2 sm:py-4 rounded-full font-medium text-sm transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap bg-white text-black hover:bg-gray-100"
               >
                 {isCreating ? (
                   <>
@@ -215,6 +214,8 @@ export function SharePopover({
                 )}
               </button>
             )}
+            </div>
+
           </div>
         </div>
       </div>

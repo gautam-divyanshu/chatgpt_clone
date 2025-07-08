@@ -128,7 +128,7 @@ export function Sidebar({
       {/* Mobile Overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
           onClick={onClose}
         />
       )}
@@ -136,7 +136,7 @@ export function Sidebar({
       {/* Sidebar */}
       <div
         className={`
-        fixed md:relative inset-y-0 left-0 z-50 h-full flex flex-col group
+        fixed md:relative inset-y-0 left-0 z-40 h-full flex flex-col group
         transition-all duration-300 ease-in-out border-r border-black/20
         ${
           isOpen

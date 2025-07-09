@@ -11,6 +11,7 @@ export const ENV = {
   MEM0_API_KEY: process.env.MEM0_API_KEY,
   MEM0_BASE_URL: process.env.MEM0_BASE_URL,
   NODE_ENV: process.env.NODE_ENV,
+  NEXTAUTH_URL: process.env.NEXTAUTH_URL,
 } as const;
 
 export const isDevelopment = ENV.NODE_ENV === 'development';

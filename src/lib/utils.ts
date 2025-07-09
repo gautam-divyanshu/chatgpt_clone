@@ -95,6 +95,29 @@ export function getUserIdFromStorage(): string {
   return newUserId;
 }
 
+export function getAuthenticatedUserId(sessionUserId?: string): string {
+  // If user is authenticated, use their auth ID
+  if (sessionUserId) {
+    return sessionUserId;
+  }
+  
+  // Fallback to local storage for anonymous users
+  return getUserIdFromStorage();
+}
+
+export function clearAnonymousUserId(): void {
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("chatgpt-user-id");
+  }
+}
+
+export function getAnonymousUserId(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return localStorage.getItem("chatgpt-user-id");
+}
+
 export function estimateTokens(
   text: string,
   tokensPerChar: number = 0.25

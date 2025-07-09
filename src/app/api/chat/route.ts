@@ -2,7 +2,8 @@ import { google } from "@ai-sdk/google";
 import { streamText } from "ai";
 import { mem0Service } from "@/lib/mem0/service";
 import { createErrorResponse, logError } from "@/lib/errors";
-import { generateUserId, generateConversationId, generateMessageId } from "@/lib/utils";
+import { generateUserId, generateConversationId, generateMessageId, getAuthenticatedUserId } from "@/lib/utils";
+import { auth } from "@/lib/auth/auth";
 import { UploadedFile } from "@/components/chat/upload-types";
 import { documentAI } from "@/lib/documentai/service";
 import { ProcessedDocument } from "@/models/ProcessedDocument";
@@ -11,6 +12,9 @@ import connectToDatabase from "@/lib/database";
 
 export async function POST(req: Request) {
   try {
+    // Get the authenticated session
+    const session = await auth();
+    
     const {
       messages,
       attachments = [],
@@ -28,55 +32,46 @@ export async function POST(req: Request) {
       );
     }
 
-    const finalUserId = userId || generateUserId();
+    // Use authenticated user ID if available, otherwise fall back to provided userId or generate one
+    const authenticatedUserId = session?.user?.id;
+    const finalUserId = getAuthenticatedUserId(authenticatedUserId) || userId || generateUserId();
+    
+    console.log('🔐 User ID determination:', {
+      authenticatedUserId,
+      providedUserId: userId,
+      finalUserId,
+      isAuthenticated: !!session?.user
+    });
     const finalConversationId = conversationId || generateConversationId();
     const currentUserMessage = messages[messages.length - 1]?.content || "";
 
-    // Get relevant memories for context (optimized for speed)
+    // Get relevant memories for context
     let memoryContext = "";
-    
     if (mem0Service.isAvailable() && currentUserMessage) {
       try {
-        // Determine if this is a personal information query for higher limit
-        const isPersonalQuery = currentUserMessage.toLowerCase().includes('what do you know about me') ||
-                               currentUserMessage.toLowerCase().includes('tell me about') ||
-                               currentUserMessage.toLowerCase().includes('remember about me') ||
-                               currentUserMessage.toLowerCase().includes('my information') ||
-                               currentUserMessage.toLowerCase().includes('my preferences');
-        
-        const memoryLimit = isPersonalQuery ? 10 : 3; // More memories for personal queries
-        
-        // Add timeout to prevent hanging
-        const memoryPromise = Promise.race([
-          mem0Service.getRelevantMemories(
-            currentUserMessage,
-            finalUserId,
-            finalConversationId,
-            memoryLimit
-          ),
-          new Promise<string[]>((_, reject) => 
-            setTimeout(() => reject(new Error('Memory timeout')), 3000)
-          )
-        ]);
-        
-        const relevantMemories = await memoryPromise;
+        const memoryPromise = mem0Service.getRelevantMemories(
+          currentUserMessage,
+          finalUserId,
+          finalConversationId,
+          5 // Standard limit for all queries
+        );
 
-        console.log(`🧠 Memory retrieval for "${currentUserMessage}":`, {
-          userId: finalUserId,
-          isPersonalQuery,
-          memoriesFound: relevantMemories.length,
-          memories: relevantMemories
-        });
+        const relevantMemories = await Promise.race([
+          memoryPromise,
+          new Promise<string[]>((_, reject) =>
+            setTimeout(() => reject(new Error("Memory timeout")), 3000)
+          ),
+        ]);
+
+        console.log(`🧠 Retrieved ${relevantMemories.length} memories for user ${finalUserId}`);
 
         if (relevantMemories.length > 0) {
-          if (isPersonalQuery) {
-            memoryContext = `\n**MEMORY CONTEXT - Personal Information About This User:**\n${relevantMemories.map(memory => `• ${memory}`).join('\n')}\n\nUse this information to answer their question about what you know about them.\n\n`;
-          } else {
-            memoryContext = `\n**RELEVANT CONTEXT:** ${relevantMemories.join('; ')}\nUse this context naturally in your response.\n\n`;
-          }
+          memoryContext = `\n**Relevant Information:**\n${relevantMemories
+            .map((mem) => `• ${mem}`)
+            .join("\n")}\n\n`;
         }
       } catch (error) {
-        console.warn("⚠️ Failed to retrieve memories (proceeding without):", error);
+        console.warn("⚠️ Failed to retrieve memories:", error);
       }
     }
 
@@ -88,7 +83,7 @@ export async function POST(req: Request) {
     );
 
     const result = await streamText({
-      model: google("gemini-1.5-flash"),
+      model: google("gemini-2.5-flash"),
       messages: processedMessages,
       temperature: 0.8, // Slightly higher for faster generation
       maxTokens: 2048, // Reduced for faster responses
@@ -115,6 +110,7 @@ export async function POST(req: Request) {
                   category: "context",
                   importance: "medium",
                   messageId: generateMessageId(),
+                  isAuthenticated: !!session?.user,
                 }
               );
               

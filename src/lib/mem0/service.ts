@@ -36,7 +36,7 @@ export class Mem0Service {
     message: string | any[],
     userId: string,
     conversationId?: string,
-    metadata?: ChatMemory["metadata"]
+    metadata?: ChatMemory["metadata"] & { isAuthenticated?: boolean }
   ): Promise<{ success: boolean; memoryId?: string; error?: string }> {
     if (!this.client) {
       return {
@@ -74,6 +74,8 @@ export class Mem0Service {
           category: memoryScope.category,
           scope: memoryScope.scope,
           importance: memoryScope.importance,
+          isAuthenticated: metadata?.isAuthenticated || false,
+          userType: metadata?.isAuthenticated ? 'authenticated' : 'anonymous',
           ...metadata,
           ...(conversationId && { source_conversation_id: conversationId }),
         };
@@ -201,11 +203,13 @@ export class Mem0Service {
   }
 
   /**
-   * Smart memory retrieval that considers conversation context and relevance
+   * Retrieves relevant memories for a user based on the current message.
+   * This simplified approach queries all user memories and lets the memory service determine relevance.
    */
   async getRelevantMemories(
     currentMessage: string,
     userId: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     conversationId: string,
     limit: number = 5
   ): Promise<string[]> {
@@ -214,243 +218,28 @@ export class Mem0Service {
     }
 
     try {
-      // Analyze current message to determine what type of memories to retrieve
-      const messageContext = this.analyzeMessageContext(currentMessage);
-
-      const relevantMemories: string[] = [];
-
-      // Special handling for direct personal information queries
-      if (this.isDirectPersonalQuery(currentMessage)) {
-        console.log(
-          "🔍 Direct personal query detected - retrieving all user memories"
-        );
-        const allUserMemories = await this.getUserMemories(userId, limit * 2);
-
-        if (allUserMemories.success && allUserMemories.memories) {
-          return allUserMemories.memories
-            .map((memory) => memory.text || memory.memory || memory.content)
-            .filter(Boolean)
-            .slice(0, limit);
-        }
-      }
-
-      // Strategy 1: Get conversation-specific memories first (if contextually relevant)
-      if (messageContext.needsConversationContext) {
-        const conversationMemories = await this.getConversationMemories(
-          conversationId,
-          userId,
-          Math.min(3, limit)
-        );
-
-        if (conversationMemories.success && conversationMemories.memories) {
-          const contextMemories = conversationMemories.memories
-            .map((memory) => memory.text || memory.memory || memory.content)
-            .filter(Boolean)
-            .slice(0, 2); // Limit conversation context
-
-          relevantMemories.push(...contextMemories);
-        }
-      }
-
-      // Strategy 2: Get global memories only if truly relevant
-      if (
-        messageContext.needsGlobalMemories &&
-        relevantMemories.length < limit
-      ) {
-        const remainingLimit = limit - relevantMemories.length;
-        const globalSearchResult = await this.searchMemories(
-          currentMessage,
-          userId,
-          remainingLimit,
-          {
-            keyword_search: true, // Enable keyword search for better matching
-            filter_memories: true, // Filter for higher precision
-            rerank: true, // Rerank for better relevance
-          }
-        );
-
-        if (globalSearchResult.success && globalSearchResult.memories) {
-          const globalMemories = globalSearchResult.memories
-            .map((memory) => memory.text || memory.memory || memory.content)
-            .filter(Boolean)
-            .filter((memory) => this.isMemoryRelevant(memory, currentMessage))
-            .slice(0, remainingLimit);
-
-          relevantMemories.push(...globalMemories);
-        }
-      }
-
-      console.log(
-        `Retrieved ${relevantMemories.length} contextually relevant memories for user ${userId}`
+      // Search across all user memories for relevance
+      const searchResult = await this.searchMemories(
+        currentMessage,
+        userId,
+        limit,
+        { rerank: true }
       );
-      console.log("Memory context analysis:", messageContext);
 
-      return relevantMemories;
+      if (searchResult.success && searchResult.memories) {
+        const memories = searchResult.memories
+          .map((memory) => memory.text || memory.memory || memory.content)
+          .filter(Boolean);
+        
+        console.log(`Retrieved ${memories.length} relevant memories for user ${userId}`);
+        return memories;
+      }
+
+      return [];
     } catch (error) {
       console.error("Error getting relevant memories:", error);
       return [];
     }
-  }
-
-  /**
-   * Analyze message to determine what type of context is needed
-   */
-  private analyzeMessageContext(message: string): {
-    needsConversationContext: boolean;
-    needsGlobalMemories: boolean;
-    contextType: "reference" | "personal" | "general" | "technical";
-  } {
-    const lowerMessage = message.toLowerCase();
-
-    // Indicators that conversation context is needed
-    const conversationIndicators = [
-      "this",
-      "that",
-      "it",
-      "here",
-      "there",
-      "above",
-      "below",
-      "screenshot",
-      "image",
-      "document",
-      "file",
-      "what you see",
-      "analyze",
-      "explain this",
-      "about this",
-      "regarding this",
-    ];
-
-    // Indicators that global memories might be relevant
-    const personalIndicators = [
-      "i like",
-      "i prefer",
-      "my favorite",
-      "recommend",
-      "suggest",
-      "what should i",
-      "help me",
-      "my",
-      "for me",
-      "about me",
-      "what do you know about me",
-      "tell me about myself",
-      "what do you remember",
-      "what have i told you",
-      "my information",
-      "my details",
-      "my preferences",
-      "remind me",
-      "what did i say",
-      "personal information",
-    ];
-
-    // Technical/general questions that don't need personal context
-    const technicalIndicators = [
-      "how to",
-      "what is",
-      "explain",
-      "define",
-      "difference between",
-      "why does",
-      "when should",
-      "where can",
-      "which is better",
-    ];
-
-    const needsConversationContext = conversationIndicators.some((indicator) =>
-      lowerMessage.includes(indicator)
-    );
-
-    const needsGlobalMemories =
-      personalIndicators.some((indicator) =>
-        lowerMessage.includes(indicator)
-      ) &&
-      !technicalIndicators.some((indicator) =>
-        lowerMessage.includes(indicator)
-      );
-
-    let contextType: "reference" | "personal" | "general" | "technical" =
-      "general";
-
-    if (needsConversationContext) {
-      contextType = "reference";
-    } else if (needsGlobalMemories) {
-      contextType = "personal";
-    } else if (
-      technicalIndicators.some((indicator) => lowerMessage.includes(indicator))
-    ) {
-      contextType = "technical";
-    }
-
-    return {
-      needsConversationContext,
-      needsGlobalMemories,
-      contextType,
-    };
-  }
-
-  /**
-   * Check if this is a direct personal information query
-   */
-  private isDirectPersonalQuery(message: string): boolean {
-    const lowerMessage = message.toLowerCase();
-
-    const directPersonalQueries = [
-      "what do you know about me",
-      "tell me about myself",
-      "what do you remember about me",
-      "what have i told you",
-      "what information do you have",
-      "my information",
-      "my details",
-      "what are my preferences",
-      "remind me about myself",
-      "what did i tell you about me",
-      "personal information",
-      "about me",
-    ];
-
-    return directPersonalQueries.some(
-      (query) =>
-        lowerMessage.includes(query) ||
-        (lowerMessage.includes("what") &&
-          lowerMessage.includes("know") &&
-          lowerMessage.includes("me")) ||
-        (lowerMessage.includes("tell") &&
-          lowerMessage.includes("about") &&
-          lowerMessage.includes("me")) ||
-        (lowerMessage.includes("remember") && lowerMessage.includes("me"))
-    );
-  }
-
-  /**
-   * Check if a memory is actually relevant to the current message
-   */
-  private isMemoryRelevant(memory: string, currentMessage: string): boolean {
-    const memoryLower = memory.toLowerCase();
-    const messageLower = currentMessage.toLowerCase();
-
-    // Check for keyword overlap
-    const messageWords = messageLower
-      .split(/\s+/)
-      .filter((word) => word.length > 3);
-    const memoryWords = memoryLower.split(/\s+/);
-
-    const overlap = messageWords.filter((word) =>
-      memoryWords.some(
-        (memWord) => memWord.includes(word) || word.includes(memWord)
-      )
-    );
-
-    // Require significant overlap for relevance
-    const relevanceThreshold = Math.max(
-      1,
-      Math.floor(messageWords.length * 0.2)
-    );
-
-    return overlap.length >= relevanceThreshold;
   }
 
   /**
@@ -581,6 +370,79 @@ export class Mem0Service {
     } catch (error) {
       return {
         success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  /**
+   * Migrate anonymous user memories to authenticated user
+   */
+  async migrateAnonymousMemories(
+    anonymousUserId: string,
+    authenticatedUserId: string
+  ): Promise<{ success: boolean; migratedCount: number; error?: string }> {
+    if (!this.client) {
+      return {
+        success: false,
+        migratedCount: 0,
+        error: this.initError || "Mem0 client not available",
+      };
+    }
+
+    try {
+      // Get all memories from the anonymous user
+      const anonymousMemories = await this.getUserMemories(anonymousUserId);
+      
+      if (!anonymousMemories.success || !anonymousMemories.memories) {
+        return { success: true, migratedCount: 0 };
+      }
+
+      console.log(`🔄 Migrating ${anonymousMemories.memories.length} memories from ${anonymousUserId} to ${authenticatedUserId}`);
+
+      let migratedCount = 0;
+      
+      // Re-add each memory with the authenticated user ID
+      for (const memory of anonymousMemories.memories) {
+        try {
+          const content = memory.text || memory.memory || memory.content;
+          if (content) {
+            const result = await this.addMemory(
+              content,
+              authenticatedUserId,
+              undefined,
+              {
+                ...memory.metadata,
+                migratedFrom: anonymousUserId,
+                isAuthenticated: true,
+                userType: 'authenticated',
+                migrationDate: new Date().toISOString(),
+              }
+            );
+            
+            if (result.success) {
+              migratedCount++;
+              // Delete the original anonymous memory
+              if (memory.id) {
+                await this.deleteMemory(memory.id);
+              }
+            }
+          }
+        } catch (error) {
+          console.warn(`Failed to migrate memory: ${error}`);
+        }
+      }
+
+      console.log(`✅ Successfully migrated ${migratedCount} memories`);
+      
+      return {
+        success: true,
+        migratedCount,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        migratedCount: 0,
         error: error instanceof Error ? error.message : "Unknown error",
       };
     }

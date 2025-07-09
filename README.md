@@ -15,6 +15,8 @@ A pixel-perfect ChatGPT clone built with Next.js 15, featuring real-time chat, m
 - **Edit Messages**: Users can edit previously submitted messages with seamless regeneration
 - **Context Window Handling**: Intelligent message segmentation for models with limited context size
 - **Conversation History**: Persistent chat history stored in MongoDB
+- **Searchable Conversations**: Users can search through their past conversations.
+- **Share Conversations**: Users can share their conversations with others via a public link.
 - **Loading States**: Animated typing indicators and smooth transitions
 
 ### 🧠 **Memory & Intelligence**
@@ -40,7 +42,7 @@ A pixel-perfect ChatGPT clone built with Next.js 15, featuring real-time chat, m
 - **MongoDB Atlas**: Scalable conversation storage
 - **Next.js 15**: Latest framework features with Turbo mode
 - **Edge Runtime**: Fast response times with edge computing
-- **Google Cloud Document AI**: Advanced document processing
+- **Google Cloud Document AI**: Advanced document processing with features like diagnosing, querying, and analyzing documents.
 
 ## 🛠️ Tech Stack
 
@@ -181,6 +183,9 @@ A pixel-perfect ChatGPT clone built with Next.js 15, featuring real-time chat, m
    - Create a service account and download JSON key
    - Create a Document AI processor
    - Note the processor ID and location
+   - To get the `GOOGLE_APPLICATION_CREDENTIALS`, you need to create a service account with the "Document AI API User" role. After creating the service account, create a key and download the JSON file. The content of this JSON file should be the value of your `GOOGLE_APPLICATION_CREDENTIALS` environment variable.
+   - The `GOOGLE_CLOUD_PROCESSOR_ID` is the ID of the Document AI processor you create in the Google Cloud Console.
+   - The `GOOGLE_CLOUD_LOCATION` is the region where your Document AI processor is located (e.g., `us`, `eu`).
 
 
 ## 🗂️ Project Structure
@@ -189,24 +194,39 @@ A pixel-perfect ChatGPT clone built with Next.js 15, featuring real-time chat, m
 chatgpt-clone/
 ├── src/
 │   ├── app/                    # Next.js app directory
-│   │   ├── api/               # API routes
-│   │   │   ├── chat/          # Chat API endpoint
-│   │   │   ├── conversations/ # Conversation management
-│   │   │   ├── memory/        # Memory API endpoints
-│   │   │   └── upload/        # File upload handling
-│   │   ├── globals.css        # Global styles
-│   │   ├── layout.tsx         # Root layout
-│   │   └── page.tsx           # Home page
-│   ├── components/            # React components
-│   │   ├── chat/              # Chat-related components
-│   │   ├── layout/            # Layout components
-│   │   ├── providers/         # Context providers
-│   │   └── sidebar/           # Sidebar components
-│   ├── lib/                   # Utility functions
-│   ├── models/                # MongoDB models
-│   └── config/                # Configuration files
-├── public/                    # Static assets
-├── .env.local                 # Environment variables
-├── package.json              # Dependencies
-└── README.md                 # This file
+│   │   ├── api/                # API routes
+│   │   │   ├── auth/           # Authentication endpoints
+│   │   │   ├── chat/           # Chat API endpoint
+│   │   │   ├── conversations/  # Conversation management
+│   │   │   ├── document-ai/    # Document AI endpoints
+│   │   │   ├── memory/         # Memory API endpoints
+│   │   │   └── upload/         # File upload handling
+│   │   ├── auth/               # Auth pages
+│   │   ├── c/                  # Conversation pages
+│   │   ├── share/              # Shared conversation pages
+│   │   ├── globals.css         # Global styles
+│   │   ├── layout.tsx          # Root layout
+│   │   └── page.tsx            # Home page
+│   ├── components/             # React components
+│   │   ├── auth/               # Auth components
+│   │   ├── chat/               # Chat-related components
+│   │   ├── documentai/         # Document AI components
+│   │   ├── layout/             # Layout components
+│   │   ├── providers/          # Context providers
+│   │   ├── sidebar/            # Sidebar components
+│   │   └── ui/                 # UI components
+│   ├── lib/                    # Utility functions
+│   │   ├── auth/               # Auth utilities
+│   │   ├── context/            # Context management
+│   │   ├── documentai/         # Document AI services
+│   │   ├── mem0/               # Mem0 AI services
+│   │   └── memory/             # Memory management
+│   ├── models/                 # MongoDB models
+│   ├── hooks/                  # React hooks
+│   ├── config/                 # Configuration files
+│   └── types/                  # TypeScript types
+├── public/                     # Static assets
+├── .env.local                  # Environment variables
+├── package.json                # Dependencies
+└── README.md                   # This file
 ```

@@ -131,7 +131,7 @@ export function SharePopover({
             <div className="flex gap-4 w-full rounded-full pl-4 p-2 border border-[#555]">
               <input
                 type="text"
-                value={shareUrl || "https://chatgpt.com/share/..."}
+                value={shareUrl || "Generating link..."}
                 readOnly
                 className={`w-full bg-transparent focus:outline-none text-lg ${
                   shareUrl ? "text-white" : "text-white/60"
